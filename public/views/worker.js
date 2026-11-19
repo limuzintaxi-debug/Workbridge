@@ -153,6 +153,7 @@ async function jobDetail(ctx, id) {
       ${job.requirements ? `<h3>Requirements</h3><p style="white-space:pre-wrap">${esc(job.requirements)}</p>` : ''}
       <h3>Business</h3>
       <p>${esc(job.business.company_name)}${job.business.country ? ` · ${esc(job.business.country)}` : ''}</p>
+      ${job.business.phone ? `<p class="job-meta"><a class="link-quiet" href="tel:${esc(job.business.phone)}">Call ${esc(job.business.phone)}</a>${job.business.contact_name ? `<span>${esc(job.business.contact_name)}</span>` : ''}</p>` : ''}
     </div>
     <div class="card">${actions}</div>
     <p><a class="link-quiet" href="#/worker/jobs">Back to listings</a></p>`;
