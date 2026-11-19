@@ -25,6 +25,7 @@ const TABLE_BY_COLLECTION = {
   invoices: 'invoices',
   notifications: 'notifications',
   reports: 'reports',
+  commissions: 'commissions',
   resetTokens: 'password_reset_tokens',
   auditLog: 'audit_log',
   payments: 'payments'
