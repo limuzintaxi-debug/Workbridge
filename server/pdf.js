@@ -9,6 +9,8 @@
  * Arabic font, which the browser print view already handles. See README.
  */
 
+import zlib from 'node:zlib';
+
 import { formatMoney } from './currency.js';
 
 const PAGE_W = 595.28;
@@ -41,13 +43,170 @@ function jpegDimensions(buffer) {
   return null;
 }
 
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+/** Reads the IHDR/PLTE/IDAT chunks of a PNG file. */
+function pngChunks(buffer) {
+  if (buffer.length < 8 || !buffer.subarray(0, 8).equals(PNG_SIGNATURE)) return null;
+  const chunks = { ihdr: null, palette: null, idat: [] };
+  let pos = 8;
+  while (pos + 8 <= buffer.length) {
+    const length = buffer.readUInt32BE(pos);
+    const type = buffer.toString('ascii', pos + 4, pos + 8);
+    const start = pos + 8;
+    const end = start + length;
+    if (end + 4 > buffer.length) break;
+    const data = buffer.subarray(start, end);
+    if (type === 'IHDR' && length >= 13) {
+      chunks.ihdr = {
+        width: data.readUInt32BE(0),
+        height: data.readUInt32BE(4),
+        bitDepth: data[8],
+        colorType: data[9],
+        interlace: data[12]
+      };
+    } else if (type === 'PLTE') {
+      chunks.palette = Buffer.from(data);
+    } else if (type === 'IDAT') {
+      chunks.idat.push(Buffer.from(data));
+    } else if (type === 'IEND') {
+      break;
+    }
+    pos = end + 4;
+  }
+  if (!chunks.ihdr) return null;
+  chunks.idat = Buffer.concat(chunks.idat);
+  return chunks;
+}
+
+function paethPredictor(a, b, c) {
+  const p = a + b - c;
+  const pa = Math.abs(p - a);
+  const pb = Math.abs(p - b);
+  const pc = Math.abs(p - c);
+  if (pa <= pb && pa <= pc) return a;
+  return pb <= pc ? b : c;
+}
+
+/** Reverses the per-scanline PNG filters, returning raw samples. */
+function unfilterPng(raw, width, height, channels) {
+  const stride = width * channels;
+  if (raw.length < (stride + 1) * height) return null;
+  const out = Buffer.alloc(stride * height);
+  for (let y = 0; y < height; y += 1) {
+    const filter = raw[y * (stride + 1)];
+    const src = y * (stride + 1) + 1;
+    const rowStart = y * stride;
+    const prevStart = rowStart - stride;
+    for (let x = 0; x < stride; x += 1) {
+      const value = raw[src + x];
+      const left = x >= channels ? out[rowStart + x - channels] : 0;
+      const up = y > 0 ? out[prevStart + x] : 0;
+      const upLeft = y > 0 && x >= channels ? out[prevStart + x - channels] : 0;
+      let restored;
+      switch (filter) {
+        case 0:
+          restored = value;
+          break;
+        case 1:
+          restored = value + left;
+          break;
+        case 2:
+          restored = value + up;
+          break;
+        case 3:
+          restored = value + ((left + up) >> 1);
+          break;
+        case 4:
+          restored = value + paethPredictor(left, up, upLeft);
+          break;
+        default:
+          return null;
+      }
+      out[rowStart + x] = restored & 0xff;
+    }
+  }
+  return out;
+}
+
+/**
+ * Converts a PNG data URL into an 8-bit RGB stream that PDF can embed.
+ * Transparent pixels are composited over white, matching what the print view
+ * shows on paper.
+ */
+function pngToRgb(buffer) {
+  const chunks = pngChunks(buffer);
+  if (!chunks || !chunks.idat.length) return null;
+  const { width, height, bitDepth, colorType, interlace } = chunks.ihdr;
+  if (!width || !height || interlace !== 0 || bitDepth !== 8) return null;
+  const channelsByType = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 };
+  const channels = channelsByType[colorType];
+  if (!channels) return null;
+
+  let raw;
+  try {
+    raw = zlib.inflateSync(chunks.idat);
+  } catch {
+    return null;
+  }
+  const samples = unfilterPng(raw, width, height, channels);
+  if (!samples) return null;
+
+  const rgb = Buffer.alloc(width * height * 3);
+  const pixels = width * height;
+  for (let i = 0, src = 0, dst = 0; i < pixels; i += 1, src += channels, dst += 3) {
+    let r;
+    let g;
+    let b;
+    if (colorType === 0 || colorType === 4) {
+      r = g = b = samples[src];
+    } else if (colorType === 2 || colorType === 6) {
+      r = samples[src];
+      g = samples[src + 1];
+      b = samples[src + 2];
+    } else {
+      const index = samples[src] * 3;
+      if (!chunks.palette || index + 2 >= chunks.palette.length) return null;
+      r = chunks.palette[index];
+      g = chunks.palette[index + 1];
+      b = chunks.palette[index + 2];
+    }
+    const alpha = colorType === 4 ? samples[src + 1] : colorType === 6 ? samples[src + 3] : 255;
+    if (alpha < 255) {
+      const back = 255 - alpha;
+      r = Math.round((r * alpha + 255 * back) / 255);
+      g = Math.round((g * alpha + 255 * back) / 255);
+      b = Math.round((b * alpha + 255 * back) / 255);
+    }
+    rgb[dst] = r;
+    rgb[dst + 1] = g;
+    rgb[dst + 2] = b;
+  }
+
+  return { width, height, buffer: zlib.deflateSync(rgb), filter: 'FlateDecode' };
+}
+
+/**
+ * Accepts the JPEG and PNG data URLs the app stores for signatures and stamps.
+ * Both are embedded; anything else is reported as unsupported so callers can
+ * fall back to a visible label instead of silently losing the image.
+ */
 function parseImage(dataUrl) {
-  const match = /^data:image\/(jpeg|jpg);base64,(.+)$/i.exec(String(dataUrl || ''));
-  if (!match) return null;
-  const buffer = Buffer.from(match[2], 'base64');
-  const size = jpegDimensions(buffer);
-  if (!size || !size.width || !size.height) return null;
-  return { buffer, ...size };
+  const value = String(dataUrl || '');
+  const jpeg = /^data:image\/(?:jpeg|jpg);base64,(.+)$/i.exec(value);
+  if (jpeg) {
+    const buffer = Buffer.from(jpeg[1], 'base64');
+    const size = jpegDimensions(buffer);
+    if (!size || !size.width || !size.height) return null;
+    return { buffer, ...size, filter: 'DCTDecode' };
+  }
+  const png = /^data:image\/png;base64,(.+)$/i.exec(value);
+  if (png) {
+    const decoded = pngToRgb(Buffer.from(png[1], 'base64'));
+    if (!decoded) return null;
+    return { ...decoded, filter: 'FlateDecode' };
+  }
+  return null;
 }
 
 export class PdfDoc {
@@ -103,14 +262,31 @@ export class PdfDoc {
     this.page.push(ops.join(' '));
   }
 
-  image(dataUrl, x, top, w, h) {
-    const parsed = parseImage(dataUrl);
-    if (!parsed) return false;
+  _place(parsed, x, top, w, h) {
     this.images.push(parsed);
     const name = `Im${this.images.length}`;
     const y = this._y(top + h);
     this.page.push(`q ${w.toFixed(2)} 0 0 ${h.toFixed(2)} ${x.toFixed(2)} ${y.toFixed(2)} cm /${name} Do Q`);
     return true;
+  }
+
+  image(dataUrl, x, top, w, h) {
+    const parsed = parseImage(dataUrl);
+    if (!parsed) return false;
+    return this._place(parsed, x, top, w, h);
+  }
+
+  /**
+   * Draws an image centred inside a box without distorting it, which is how the
+   * print view lays out signatures and stamps.
+   */
+  imageFit(dataUrl, x, top, maxW, maxH) {
+    const parsed = parseImage(dataUrl);
+    if (!parsed) return false;
+    const scale = Math.min(maxW / parsed.width, maxH / parsed.height);
+    const w = parsed.width * scale;
+    const h = parsed.height * scale;
+    return this._place(parsed, x + (maxW - w) / 2, top + (maxH - h) / 2, w, h);
   }
 
   /** Wraps text to a width in points, returning the rendered lines. */
@@ -162,7 +338,8 @@ export class PdfDoc {
       add({
         dict:
           `<</Type/XObject/Subtype/Image/Width ${img.width}/Height ${img.height}` +
-          `/ColorSpace/DeviceRGB/BitsPerComponent 8/Filter/DCTDecode/Length ${img.buffer.length}>>`,
+          `/ColorSpace/DeviceRGB/BitsPerComponent 8/Filter/${img.filter || 'DCTDecode'}` +
+          `/Length ${img.buffer.length}>>`,
         stream: img.buffer
       })
     );
@@ -493,7 +670,7 @@ export function buildInvoicePdf(invoice, { generatedAt = new Date() } = {}) {
   doc.text('Authorised signature', 40, stampTop, { size: 8, bold: true, color: GREY });
   doc.rect(40, stampTop + 8, 220, 86, { fill: [1, 1, 1], stroke: [0.85, 0.87, 0.9] });
   if (invoice.signature) {
-    if (!doc.image(invoice.signature, 48, stampTop + 14, 204, 56)) {
+    if (!doc.imageFit(invoice.signature, 48, stampTop + 14, 204, 56)) {
       doc.text('Signed electronically', 48, stampTop + 44, { size: 9, color: NAVY });
     }
   }
@@ -503,7 +680,9 @@ export function buildInvoicePdf(invoice, { generatedAt = new Date() } = {}) {
   if (invoice.stamp) {
     doc.text('Company stamp', 300, stampTop, { size: 8, bold: true, color: GREY });
     doc.rect(300, stampTop + 8, 120, 86, { fill: [1, 1, 1], stroke: [0.85, 0.87, 0.9] });
-    doc.image(invoice.stamp, 306, stampTop + 14, 108, 74);
+    if (!doc.imageFit(invoice.stamp, 306, stampTop + 14, 108, 74)) {
+      doc.text('Company stamp on file', 312, stampTop + 50, { size: 8, color: GREY });
+    }
   }
 
   footer(doc, invoice.serial);
