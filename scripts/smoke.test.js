@@ -367,23 +367,68 @@ try {
     assert.ok(!JSON.stringify(publicList.json).includes('Private Street 9'));
   });
 
-  await step('admin overview, moderation and commission settings work', async () => {
+  await step('admin sets any commission percentage and it applies to new documents', async () => {
     const overview = await admin.get('/api/admin/overview');
     assert.equal(overview.status, 200);
     assert.ok(overview.json.counts.workers >= 1);
     assert.equal(overview.json.commission.enabled, false);
+    assert.equal(overview.json.commission_summary.count, 0, 'nothing recorded while commission is off');
 
-    const settings = await admin.put('/api/admin/settings/commission', { enabled: true, rate: 2, payer: 'business' });
+    const settings = await admin.put('/api/admin/settings/commission', { enabled: true, rate: 2.5, payer: 'business' });
     assert.equal(settings.status, 200, settings.text);
-    assert.equal(settings.json.commission.rate, 2);
+    assert.equal(settings.json.commission.rate, 2.5, 'any 0.5% step is accepted');
 
     const meta = await anon.get('/api/meta');
-    assert.equal(meta.json.commission.rate, 2);
+    assert.equal(meta.json.commission.rate, 2.5);
 
-    const badRate = await admin.put('/api/admin/settings/commission', { enabled: true, rate: 5, payer: 'business' });
-    assert.equal(badRate.status, 400, 'only 1% or 2% are allowed');
+    const tooHigh = await admin.put('/api/admin/settings/commission', { enabled: true, rate: 25, payer: 'business' });
+    assert.equal(tooHigh.status, 400, 'rates above 20% are refused');
+    const offGrid = await admin.put('/api/admin/settings/commission', { enabled: true, rate: 2.3, payer: 'business' });
+    assert.equal(offGrid.status, 400, 'rates must land on a 0.5% step');
 
-    const reset = await admin.put('/api/admin/settings/commission', { enabled: false, rate: 1, payer: 'business' });
+    // Documents created after the change pick the percentage up automatically.
+    const invoice = await business.post('/api/invoices', {
+      issuer_name: 'Demo Build LLC',
+      client_name: 'Commission Client',
+      currency: 'AED',
+      items: [{ description: 'Commission test work', quantity: 1, unit_price: 400 }],
+      vat_rate: 0
+    });
+    assert.equal(invoice.status, 201, invoice.text);
+    assert.equal(invoice.json.invoice.total, 400);
+    assert.equal(invoice.json.invoice.commission, undefined, 'an invoice never shows commission');
+    assert.equal(invoice.json.invoice.commission_rate, undefined);
+    assert.equal(invoice.json.invoice.commission_amount, undefined);
+
+    const agreement = await business.post('/api/agreements', {
+      worker_id: workerId,
+      scope: 'Commission test scope.',
+      terms: 'Commission test terms.',
+      pay_amount: 1000,
+      pay_period: 'month'
+    });
+    assert.equal(agreement.status, 201, agreement.text);
+    assert.equal(agreement.json.agreement.commission_rate, 2.5, 'the agreement shows the applied rate');
+    assert.equal(agreement.json.agreement.commission_amount, 25);
+
+    const ledger = await admin.get('/api/admin/commissions');
+    assert.equal(ledger.status, 200);
+    assert.equal(ledger.json.entries.length, 2, 'one record per new document');
+    const invoiceEntry = ledger.json.entries.find((e) => e.doc_type === 'invoice');
+    assert.equal(invoiceEntry.rate, 2.5);
+    assert.equal(invoiceEntry.commission_amount, 10);
+    assert.equal(invoiceEntry.currency, 'AED');
+    assert.equal(invoiceEntry.business_name, 'Demo Build LLC');
+    assert.equal(invoiceEntry.ref, invoice.json.invoice.serial);
+    const agreementEntry = ledger.json.entries.find((e) => e.doc_type === 'agreement');
+    assert.equal(agreementEntry.commission_amount, 25);
+    assert.equal(agreementEntry.ref, agreement.json.agreement.ref);
+    assert.equal(ledger.json.summary.count, 2);
+
+    const workerLedger = await worker.get('/api/admin/commissions');
+    assert.equal(workerLedger.status, 403, 'the commission record is administrator-only');
+
+    const reset = await admin.put('/api/admin/settings/commission', { enabled: false, rate: 0, payer: 'business' });
     assert.equal(reset.status, 200);
     assert.equal(reset.json.commission.enabled, false);
   });
