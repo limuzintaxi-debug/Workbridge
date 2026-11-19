@@ -12,6 +12,7 @@ import {
   storeInfo
 } from './store.js';
 import { hashPassword, verifyPassword, requireRole, setSessionCookie } from './security.js';
+import { mailConfigured, sendPasswordResetEmail } from './mail.js';
 import { CURRENCY_CATALOG, DEFAULT_CURRENCY, isValidCurrency } from './currency.js';
 import { auth as supaAuth, uploadDocument, signedDocumentUrl, persistenceDriver } from './supabase.js';
 import { buildAgreementPdf, buildInvoicePdf } from './pdf.js';
@@ -120,10 +121,34 @@ router.post('/auth/forgot-password', async (req, res) => {
   persist();
 
   const link = `${publicOrigin(req)}/#/reset-password?token=${token}`;
-  console.log(`[workbridge] password reset link for ${email}: ${link}`);
 
-  const payload = { ...generic };
-  if (config.nodeEnv !== 'production') payload.dev_reset_url = link;
+  // Deliver the single-use link to the account holder's inbox. The generic
+  // wording above is kept so the endpoint never reveals which emails exist.
+  let emailed = false;
+  if (mailConfigured()) {
+    try {
+      await sendPasswordResetEmail({
+        to: user.email,
+        name: user.full_name,
+        link,
+        expiresMinutes: Math.round(RESET_TTL_MS / 60000)
+      });
+      emailed = true;
+    } catch (error) {
+      console.error('[workbridge] password reset email failed:', error.message);
+      return fail(
+        res,
+        502,
+        'email_failed',
+        'The reset email could not be sent right now. Please try again, or contact support.'
+      );
+    }
+  } else {
+    console.log(`[workbridge] password reset link for ${email}: ${link}`);
+  }
+
+  const payload = { ...generic, email_sent: emailed };
+  if (!emailed && config.nodeEnv !== 'production') payload.dev_reset_url = link;
   return res.json(payload);
 });
 
@@ -190,7 +215,7 @@ router.patch('/auth/password', requireRole('worker', 'business', 'admin'), (req,
 
 // Fallback when a worker or business cannot complete self-service recovery:
 // the administrator issues a single-use link (never sets a password directly).
-router.post('/admin/users/:id/reset-link', requireRole('admin'), (req, res) => {
+router.post('/admin/users/:id/reset-link', requireRole('admin'), async (req, res) => {
   const db = data();
   const user = db.users.find((u) => u.id === req.params.id && u.role !== 'admin');
   if (!user) return fail(res, 404, 'not_found', 'Account not found.');
@@ -212,12 +237,31 @@ router.post('/admin/users/:id/reset-link', requireRole('admin'), (req, res) => {
   audit(req.user.id, 'admin.password_reset_issued', user.email);
   persist();
 
+  const resetUrl = `${publicOrigin(req)}/#/reset-password?token=${token}`;
+  let emailed = false;
+  if (mailConfigured()) {
+    try {
+      await sendPasswordResetEmail({
+        to: user.email,
+        name: user.full_name,
+        link: resetUrl,
+        expiresMinutes: Math.round(RESET_TTL_MS / 60000)
+      });
+      emailed = true;
+    } catch (error) {
+      console.error('[workbridge] admin reset email failed:', error.message);
+    }
+  }
+
   res.json({
     ok: true,
     email: user.email,
     expires_at: expiresAt,
-    reset_url: `${publicOrigin(req)}/#/reset-password?token=${token}`,
-    message: 'Share this single-use link with the account holder. It expires in 30 minutes.'
+    email_sent: emailed,
+    reset_url: resetUrl,
+    message: emailed
+      ? 'A single-use reset link was emailed to the account holder. It expires in 30 minutes.'
+      : 'Email delivery is not configured, so no email was sent. Share the single-use link below; it expires in 30 minutes.'
   });
 });
 
@@ -232,6 +276,7 @@ router.get('/admin/settings', requireRole('admin'), (req, res) => {
       admin_exists: adminExists(),
       supabase_configured: Boolean(config.supabaseUrl && config.supabaseServiceKey),
       supabase_auth: supabaseAuthConfigured(),
+      mail_configured: mailConfigured(),
       app_url: config.appUrl || null
     }
   });
