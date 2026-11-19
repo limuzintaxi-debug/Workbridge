@@ -197,7 +197,7 @@ async function jobDetail(ctx, id) {
               .map(
                 (a) => `<article class="card card-tight">
           <div class="section-head" style="margin-bottom:6px">
-            <div><strong>${esc(a.worker_name)}</strong><div class="job-meta"><span>${esc(a.worker_category || '—')}</span>${a.worker_city ? `<span>${esc(a.worker_city)}</span>` : ''}</div></div>
+            <div><strong>${esc(a.worker_name)}</strong><div class="job-meta"><span>${esc(a.worker_category || '—')}</span>${a.worker_city ? `<span>${esc(a.worker_city)}</span>` : ''}${a.worker_phone ? `<a class="link-quiet" href="tel:${esc(a.worker_phone)}">${esc(a.worker_phone)}</a>` : ''}</div></div>
             <div>${pill(a.status)}</div>
           </div>
           ${a.message ? `<p class="muted" style="margin:0 0 8px">${esc(a.message)}</p>` : ''}
@@ -319,7 +319,7 @@ async function applications(ctx) {
           (a) => `<article class="job-card">
         <header>
           <div><h3>${esc(a.worker_name)}</h3>
-            <div class="job-meta"><span class="tag">${esc(a.worker_category || '—')}</span><span>${esc(a.job_title)}</span><span>${esc(fmtDate(a.created_at))}</span></div>
+            <div class="job-meta"><span class="tag">${esc(a.worker_category || '—')}</span><span>${esc(a.job_title)}</span><span>${esc(fmtDate(a.created_at))}</span>${a.worker_phone ? `<a class="link-quiet" href="tel:${esc(a.worker_phone)}">${esc(a.worker_phone)}</a>` : ''}</div>
           </div>
           <div>${pill(a.status)}</div>
         </header>
