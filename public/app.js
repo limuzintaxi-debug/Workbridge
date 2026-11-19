@@ -38,6 +38,7 @@ const NAV = {
     ['#/admin/institutions', 'nav.institutions'],
     ['#/admin/listings', 'nav.listings'],
     ['#/admin/documents', 'nav.documents'],
+    ['#/admin/commission', 'nav.commission'],
     ['#/admin/reports', 'nav.reports'],
     ['#/admin/settings', 'nav.settings']
   ]

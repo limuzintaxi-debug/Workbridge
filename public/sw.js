@@ -1,5 +1,5 @@
 /* WORKBRIDGE service worker — app shell caching only. API calls always go to the network. */
-const CACHE = 'workbridge-v3';
+const CACHE = 'workbridge-v4';
 const SHELL = [
   '/',
   '/index.html',
