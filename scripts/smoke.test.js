@@ -239,8 +239,19 @@ try {
     });
     assert.equal(res.status, 201, res.text);
     agreementId = res.json.agreement.id;
-    assert.match(res.json.agreement.ref, /^WB-AG-\d{4}-\d{5}$/);
+    // Documented format: WB-AGR-YYYYMMDD-NNNN (date-stamped, sequential counter).
+    assert.match(res.json.agreement.ref, /^WB-AGR-\d{8}-\d{4,}$/);
     assert.ok(res.json.agreement.created_at, 'agreement must carry a timestamp');
+
+    const second = await business.post('/api/agreements', {
+      worker_id: workerId,
+      scope: 'Second demo agreement scope.',
+      terms: 'Second demo agreement terms.',
+      pay_amount: 100,
+      pay_period: 'day'
+    });
+    assert.equal(second.status, 201, second.text);
+    assert.notEqual(second.json.agreement.ref, res.json.agreement.ref, 'references must be unique');
   });
 
   await step('both parties sign the agreement electronically', async () => {
@@ -278,7 +289,8 @@ try {
     });
     assert.equal(res.status, 201, res.text);
     invoiceId = res.json.invoice.id;
-    assert.match(res.json.invoice.serial, /^WB-INV-\d{4}-\d{5}$/);
+    // Documented format: WB-INV-YYYYMM-NNNN (month-stamped, sequential counter).
+    assert.match(res.json.invoice.serial, /^WB-INV-\d{6}-\d{4,}$/);
     assert.equal(res.json.invoice.subtotal, 250);
     assert.equal(res.json.invoice.vat_amount, 12.5);
     assert.equal(res.json.invoice.total, 262.5);
