@@ -22,12 +22,14 @@ async function ownJobs() {
 }
 
 async function overview(ctx) {
-  const [jobsRes, appsRes, agrRes, invRes] = await Promise.all([
+  const [jobsRes, appsRes, agrRes, invRes, metaRes] = await Promise.all([
     api.get('/jobs?status=all'),
     api.get('/applications'),
     api.get('/agreements'),
-    api.get('/invoices')
+    api.get('/invoices'),
+    api.get('/meta')
   ]);
+  const commission = (metaRes && metaRes.commission) || { enabled: false, rate: 0, payer: 'business' };
   const mine = (jobsRes.jobs || []).filter((job) => job.business.id === ctx.user.id);
   const apps = appsRes.applications || [];
   const pendingApps = apps.filter((a) => a.status === 'pending');
@@ -65,6 +67,7 @@ async function overview(ctx) {
             <dt>Company</dt><dd>${esc((ctx.user.profile || {}).company_name || '—')}</dd>
             <dt>Contact</dt><dd>${esc((ctx.user.profile || {}).contact_name || ctx.user.full_name)}</dd>
             <dt>Country</dt><dd>${esc((ctx.user.profile || {}).country || '—')}</dd>
+            <dt>Platform commission</dt><dd>${commission.enabled ? `${commission.rate}% (paid by ${esc(commission.payer)})` : 'Not applicable'}</dd>
           </dl>
           <a class="btn btn-ghost btn-sm" href="#/business/profile">Edit profile</a>
         </div>

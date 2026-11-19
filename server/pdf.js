@@ -366,6 +366,21 @@ export function buildAgreementPdf(agreement, { generatedAt = new Date() } = {}) 
     align: 'right'
   });
 
+  // Commission is shown on the agreement (never on an invoice) using the
+  // percentage that was in force when the agreement was created.
+  if (agreement.commission_rate) {
+    doc.text(
+      `Platform commission ${agreement.commission_rate}%${
+        agreement.commission_amount
+          ? ` (${formatMoney(agreement.commission_amount, agreement.currency)})`
+          : ''
+      } - paid by ${agreement.commission_payer || 'business'}`,
+      52,
+      y + 52,
+      { size: 8, color: GREY }
+    );
+  }
+
   y += 84;
   if (y > PAGE_H - 240) {
     doc.newPage();
