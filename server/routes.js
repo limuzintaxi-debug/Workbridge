@@ -223,6 +223,13 @@ router.post('/auth/register', (req, res) => {
 
   db.users.push(user);
   persist();
+  if (user.status === 'pending') {
+    return res.status(201).json({
+      ok: true,
+      status: 'pending',
+      message: 'Your registration was received and is awaiting administrator approval.'
+    });
+  }
   setSessionCookie(req, res, user);
   return res.status(201).json(sessionPayload(user));
 });
@@ -234,6 +241,12 @@ router.post('/auth/login', (req, res) => {
   const user = db.users.find((u) => u.email === email);
   if (!user || !verifyPassword(password, user.password_hash)) {
     return fail(res, 401, 'invalid_credentials', 'Email or password is incorrect.');
+  }
+  if (user.status === 'pending') {
+    return fail(res, 403, 'pending_approval', 'Your registration is awaiting administrator approval.');
+  }
+  if (user.status === 'rejected') {
+    return fail(res, 403, 'registration_rejected', 'This registration was not approved. Please contact support.');
   }
   if (user.status !== 'active') {
     return fail(res, 403, 'account_suspended', 'This account is suspended. Please contact support.');
@@ -363,6 +376,9 @@ router.post('/jobs', requireRole('business'), (req, res) => {
     pay_period: PAY_PERIODS.includes(str(body.pay_period, 20))
       ? str(body.pay_period, 20)
       : 'day',
+    currency: isValidCurrency(str(body.currency, 8).toUpperCase())
+      ? str(body.currency, 8).toUpperCase()
+      : db.settings.currency.default,
     requirements: str(body.requirements, 1000),
     status: 'open',
     created_at: nowIso(),
@@ -870,10 +886,11 @@ router.patch('/admin/users/:id', requireRole('admin'), (req, res) => {
   const user = data().users.find((u) => u.id === req.params.id && u.role !== 'admin');
   if (!user) return fail(res, 404, 'not_found', 'Account not found.');
   const status = str((req.body || {}).status, 20);
-  if (!['active', 'suspended'].includes(status)) {
-    return fail(res, 400, 'invalid_status', 'Choose active or suspended.');
+  if (!['active', 'pending', 'suspended', 'rejected'].includes(status)) {
+    return fail(res, 400, 'invalid_status', 'Choose approved, pending, rejected or suspended.');
   }
   user.status = status;
+  if (status === 'active') user.approved_at = nowIso();
   persist();
   res.json({ user: publicUser(user, profileFor(user)) });
 });
