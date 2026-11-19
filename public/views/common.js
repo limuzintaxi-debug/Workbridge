@@ -55,7 +55,7 @@ export function signaturePadHtml(id = 'signature', label = 'Signature') {
     <label for="${id}">${esc(label)}</label>
     <div class="signature-box"><canvas id="${id}" aria-label="${esc(label)} pad"></canvas></div>
     <p class="sig-hint">Sign with your finger on a touchscreen, or draw with the mouse.
-      <button type="button" class="btn btn-ghost btn-sm" data-clear-sig="${id}">Clear</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-clear-sig="${id}">Clear Signature</button>
     </p>
   </div>`;
 }

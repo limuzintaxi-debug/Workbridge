@@ -150,11 +150,27 @@ export function mountSignaturePad(canvas) {
   canvas.addEventListener('touchmove', move, { passive: false });
   canvas.addEventListener('touchend', end);
 
+  const clear = () => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    dirty = false;
+    drawing = false;
+    last = null;
+  };
+
+  // signaturePadHtml renders a Clear button beside the pad; bind it here so every
+  // signature surface (agreements and invoices) can reset a mistake and re-sign.
+  const clearButton = canvas.id
+    ? document.querySelector(`[data-clear-sig="${canvas.id}"]`)
+    : null;
+  if (clearButton) {
+    clearButton.addEventListener('click', (event) => {
+      event.preventDefault();
+      clear();
+    });
+  }
+
   return {
-    clear() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      dirty = false;
-    },
+    clear,
     isDirty: () => dirty,
     toDataURL: () => (dirty ? canvas.toDataURL('image/png') : null)
   };
