@@ -71,7 +71,10 @@ try {
   step(`local server ready on ${BASE}`, ready);
   if (!ready) throw new Error(`server did not start: ${serverLog.split('\n').slice(-4).join(' ')}`);
 
-  const { chromium } = await import(BROWSER_MODULE);
+  // The shared browser runtime is a CommonJS package, so fall back to `default`.
+  const playwright = await import(BROWSER_MODULE);
+  const chromium = playwright.chromium || (playwright.default && playwright.default.chromium);
+  if (!chromium) throw new Error(`Playwright chromium not available from ${BROWSER_MODULE}`);
   browser = await chromium.launch({ args: ['--no-sandbox'] });
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const pageErrors = [];
