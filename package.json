@@ -1,0 +1,19 @@
+{
+  "name": "workbridge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "WORKBRIDGE — booking, agreements, institutional & social support and invoices for workers and businesses",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node scripts/smoke.test.js",
+    "icons": "node scripts/make-icons.mjs"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
