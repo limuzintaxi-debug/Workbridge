@@ -1,43 +1,52 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="WORKBRIDGE">
   <title>WORKBRIDGE</title>
-  <rect width="512" height="512" fill="#ffffff" />
-  <circle cx="256" cy="256" r="252" fill="#ffffff" />
+  <defs>
+    <clipPath id="globe-clip"><circle cx="256" cy="256" r="236" /></clipPath>
+    <linearGradient id="coral" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FBDAD5" />
+      <stop offset="1" stop-color="#F2B2A9" />
+    </linearGradient>
+  </defs>
 
-  <!-- Red and white global network globe -->
-  <g stroke="#d62828" fill="none">
-    <circle cx="256" cy="222" r="132" stroke-width="9" />
-    <ellipse cx="256" cy="222" rx="58" ry="132" stroke-width="6" />
-    <ellipse cx="256" cy="222" rx="104" ry="132" stroke-width="6" />
-    <line x1="124" y1="222" x2="388" y2="222" stroke-width="6" />
-    <path d="M138 166 Q256 138 374 166" stroke-width="6" />
-    <path d="M138 280 Q256 308 374 280" stroke-width="6" />
-  </g>
-  <g stroke="#d62828" stroke-width="4" opacity="0.75">
-    <path d="M150 178 L256 104 L356 174" fill="none" />
-    <path d="M190 296 L256 222 L330 292" fill="none" />
-  </g>
-  <g fill="#d62828">
-    <circle cx="150" cy="178" r="9" />
-    <circle cx="356" cy="174" r="9" />
-    <circle cx="256" cy="104" r="9" />
-    <circle cx="190" cy="296" r="9" />
-    <circle cx="330" cy="292" r="9" />
-  </g>
+  <!-- Full-bleed plate so the installed icon has no transparent corners -->
+  <rect width="512" height="512" fill="#FBDAD5" />
 
-  <!-- WR mark on a white plate for legibility -->
-  <ellipse cx="256" cy="206" rx="120" ry="54" fill="#ffffff" opacity="0.94" />
-  <path d="M170 172 L198 244 L228 196 L258 244 L286 172" fill="none" stroke="#0b1f3a" stroke-width="20" stroke-linejoin="miter" />
-  <path d="M306 244 L306 172 L334 172 Q354 172 354 192 Q354 212 334 212 L306 212 M334 212 L358 244" fill="none" stroke="#f58220" stroke-width="20" stroke-linejoin="round" />
-
-  <!-- Black and white handshake -->
-  <g transform="translate(256,394)">
-    <g transform="rotate(-13)">
-      <rect x="-152" y="-23" width="152" height="46" rx="23" fill="#0a0a0a" />
-    </g>
-    <g transform="rotate(13)">
-      <rect x="0" y="-23" width="152" height="46" rx="23" fill="#ffffff" stroke="#0a0a0a" stroke-width="9" />
-    </g>
-    <circle cx="0" cy="0" r="21" fill="#0a0a0a" />
-    <path d="M-58 6 L-30 6 M-58 18 L-26 18" stroke="#ffffff" stroke-width="5" stroke-linecap="round" />
+  <!-- Globe in a very light coral/red tone -->
+  <circle cx="256" cy="256" r="236" fill="url(#coral)" />
+  <g clip-path="url(#globe-clip)" fill="none" stroke="#ffffff" stroke-width="7" opacity="0.9">
+    <ellipse cx="256" cy="256" rx="118" ry="236" />
+    <ellipse cx="256" cy="256" rx="58" ry="236" />
+    <line x1="20" y1="256" x2="492" y2="256" />
+    <ellipse cx="256" cy="256" rx="236" ry="92" />
+    <ellipse cx="256" cy="256" rx="236" ry="176" />
   </g>
+  <circle cx="256" cy="256" r="236" fill="none" stroke="#E8746A" stroke-width="10" opacity="0.5" />
+
+  <!-- Navy W -->
+  <path
+    d="M116 172 L168 364 L226 264 L284 364 L336 172"
+    fill="none"
+    stroke="#0B1F3A"
+    stroke-width="46"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- Gold/orange B: upper stroke crosses into the W, lower bowl stays open -->
+  <path
+    d="M292 172 H352 A44 44 0 0 1 352 260"
+    fill="none"
+    stroke="#E8942F"
+    stroke-width="44"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path d="M352 172 V364" fill="none" stroke="#E8942F" stroke-width="44" stroke-linecap="round" />
+  <path
+    d="M352 272 A46 46 0 0 1 392 342"
+    fill="none"
+    stroke="#E8942F"
+    stroke-width="44"
+    stroke-linecap="round"
+  />
 </svg>
