@@ -8,6 +8,7 @@ const TABS = [
   ['#/admin/institutions', 'Institutions'],
   ['#/admin/listings', 'Listings'],
   ['#/admin/documents', 'Agreements & Invoices'],
+  ['#/admin/commission', 'Commission'],
   ['#/admin/reports', 'Reports'],
   ['#/admin/settings', 'Settings']
 ];
@@ -17,7 +18,7 @@ function shell(path, title, subtitle, body) {
 }
 
 async function overview(ctx) {
-  const { counts, commission } = await api.get('/admin/overview');
+  const { counts, commission, commission_summary: commissionSummary } = await api.get('/admin/overview');
   const body = `
     ${statCards([
       ['Workers', counts.workers],
@@ -43,9 +44,9 @@ async function overview(ctx) {
       </div>
       <div class="card">
         <h3>Commission</h3>
-        <p class="muted">${commission && commission.enabled ? `Enabled at ${commission.rate}% (${esc(commission.payer)} pays) — settings only.` : 'Off — no commission is collected.'}</p>
-        <p class="sig-hint">Commission is a future setting. No document currently adds a commission line.</p>
-        <a class="btn btn-ghost btn-sm" href="#/admin/settings">Commission settings</a>
+        <p class="muted">${commission && commission.enabled ? `Enabled at ${commission.rate}% — paid by ${esc(commission.payer)}.` : 'Off — no commission is recorded.'}</p>
+        <p class="sig-hint">${commissionSummary && commissionSummary.count ? `${commissionSummary.count} recorded document${commissionSummary.count === 1 ? '' : 's'} in the commission record.` : 'No commission recorded yet.'} Applied to every new agreement and invoice, and never shown on an invoice.</p>
+        <a class="btn btn-ghost btn-sm" href="#/admin/commission">Open commission dashboard</a>
       </div>
     </div>`;
 
@@ -473,30 +474,14 @@ async function settings(ctx) {
     <p class="sig-hint">Set Supabase credentials in the server environment to move all storage to the managed database. See docs/SUPABASE.md.</p>
   </div>`;
 
-  const body = `${currencyCard}${registrationCard}<div class="card">
-    <h2>Commission settings</h2>
-    <p class="muted">Commission is a future option and is <strong>off by default</strong>. Nothing is collected now and no document adds a commission line.</p>
-    <form id="commission-form">
-      <div class="field"><label><input type="checkbox" name="enabled" ${commission && commission.enabled ? 'checked' : ''} style="width:auto;min-height:0;margin-right:8px" />Enable commission (future)</label></div>
-      <div class="form-row two">
-        <div class="field"><label for="rate">Rate</label>
-          <select id="rate" name="rate">
-            <option value="1"${commission && commission.rate === 1 ? ' selected' : ''}>1%</option>
-            <option value="2"${commission && commission.rate === 2 ? ' selected' : ''}>2%</option>
-          </select>
-        </div>
-        <div class="field"><label for="payer">Payer</label>
-          <select id="payer" name="payer">
-            ${options(['business', 'worker', 'both'], commission && commission.payer)}
-          </select>
-        </div>
-      </div>
-      <button class="btn btn-navy" type="submit">Save settings</button>
-    </form>
-    <div id="commission-state" style="margin-top:12px" class="notice">
-      Current: ${commission && commission.enabled ? `enabled at ${commission.rate}% (${esc(commission.payer)} pays)` : 'OFF — no commission collected'}
-    </div>
+  const commissionCard = `<div class="card">
+    <h2>Commission</h2>
+    <p class="muted">Current: <strong>${commission && commission.enabled ? `${commission.rate}% (${esc(commission.payer)} pays)` : 'OFF'}</strong></p>
+    <p class="sig-hint">The percentage is changed on the Commission page. It applies to every new agreement and invoice and is recorded for the administrator only.</p>
+    <a class="btn btn-ghost btn-sm" href="#/admin/commission">Open commission dashboard</a>
   </div>`;
+
+  const body = `${currencyCard}${registrationCard}${commissionCard}`;
 
   return {
     title: 'Settings',
@@ -541,6 +526,76 @@ async function settings(ctx) {
         }
       });
 
+    }
+  };
+}
+
+// Administrator commission dashboard: set the rate, see totals and the full record.
+async function commissionView(ctx) {
+  const { commission, entries, summary } = await api.get('/admin/commissions');
+
+  const totalsRows = (summary.by_currency || [])
+    .map(
+      (row) => `<tr><td>${esc(row.currency)}</td><td>${row.documents}</td><td>${money(
+        row.base_total,
+        row.currency
+      )}</td><td><strong>${money(row.commission_total, row.currency)}</strong></td></tr>`
+    )
+    .join('');
+
+  const ledgerRows = entries.length
+    ? entries
+        .map(
+          (entry) => `<tr>
+        <td>${esc(fmtDateTime(entry.created_at))}</td>
+        <td>${entry.doc_type === 'invoice' ? 'Invoice' : 'Agreement'}<br /><span class="muted">${esc(
+            entry.ref || ''
+          )}</span></td>
+        <td>${esc(entry.business_name || '—')}<br /><span class="muted">${esc(
+            entry.worker_name || '—'
+          )}</span></td>
+        <td>${money(entry.amount, entry.currency)}</td>
+        <td>${entry.rate}%</td>
+        <td><strong>${money(entry.commission_amount, entry.currency)}</strong></td>
+        <td>${esc(entry.payer || '—')}</td>
+      </tr>`
+        )
+        .join('')
+    : `<tr><td colspan="7" class="muted">No commission recorded yet. A row appears here each time an agreement or invoice is created while commission is enabled.</td></tr>`;
+
+  const body = `
+    <div class="card">
+      <h2>Commission percentage</h2>
+      <p class="muted">The selected percentage applies automatically to every new agreement and every new invoice. Documents that already exist keep the rate they were recorded with.</p>
+      <form id="commission-form">
+        <div class="form-row two">
+          <div class="field"><label for="rate">Rate (%)</label>
+            <input id="rate" name="rate" type="number" min="0" max="20" step="0.5" value="${commission.rate}" required />
+          </div>
+          <div class="field"><label for="payer">Payer</label>
+            <select id="payer" name="payer">${options(['business', 'worker', 'both'], commission.payer)}</select>
+          </div>
+        </div>
+        <div class="field"><label><input type="checkbox" name="enabled" ${commission.enabled ? 'checked' : ''} style="width:auto;min-height:0;margin-right:8px" />Commission enabled (0% switches it off)</label></div>
+        <button class="btn btn-navy" type="submit">Save commission percentage</button>
+      </form>
+      <div class="notice" id="commission-state" style="margin-top:12px">
+        Current: ${commission.enabled ? `${commission.rate}% paid by ${esc(commission.payer)}` : 'OFF — no commission recorded'}
+      </div>
+    </div>
+    <div class="card">
+      <h2>Totals</h2>
+      ${summary.count ? `<table class="doc-table"><thead><tr><th>Currency</th><th>Documents</th><th>Document value</th><th>Commission</th></tr></thead><tbody>${totalsRows}</tbody></table>` : '<p class="muted">No commission recorded yet.</p>'}
+    </div>
+    <div class="card">
+      <h2>Commission record</h2>
+      <table class="doc-table"><thead><tr><th>Date</th><th>Document</th><th>Business / Worker</th><th>Amount</th><th>Rate</th><th>Commission</th><th>Payer</th></tr></thead><tbody>${ledgerRows}</tbody></table>
+    </div>`;
+
+  return {
+    title: 'Commission',
+    html: shell('#/admin/commission', 'Commission', 'Rate, totals and record', body),
+    mount() {
       const form = document.getElementById('commission-form');
       form.addEventListener('submit', async (event) => {
         event.preventDefault();
@@ -552,10 +607,9 @@ async function settings(ctx) {
             rate: Number(form.elements.rate.value),
             payer: form.elements.payer.value
           });
-          document.getElementById('commission-state').textContent = res.commission.enabled
-            ? `Current: enabled at ${res.commission.rate}% (${res.commission.payer} pays)`
-            : 'Current: OFF — no commission collected';
-          toast('Settings saved', 'success');
+          toast('Commission percentage saved', 'success');
+          await ctx.refresh();
+          return res;
         } catch (error) {
           toast(error.message, 'error');
         } finally {
@@ -573,6 +627,7 @@ export async function view(ctx) {
   if (section === 'institutions') return institutions(ctx);
   if (section === 'listings') return listings(ctx);
   if (section === 'documents') return documents(ctx);
+  if (section === 'commission') return commissionView(ctx);
   if (section === 'reports') return reports(ctx);
   if (section === 'settings') return settings(ctx);
   return { title: 'Not found', html: shell('/admin', 'Not found', '', empty('That page does not exist.')) };
