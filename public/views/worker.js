@@ -25,17 +25,19 @@ async function approvedInstitutions() {
 }
 
 async function overview(ctx) {
-  const [jobsRes, appsRes, agrRes, invRes, notifRes, institutions] = await Promise.all([
+  const [jobsRes, appsRes, agrRes, invRes, notifRes, institutions, metaRes] = await Promise.all([
     api.get('/jobs?status=open'),
     api.get('/applications'),
     api.get('/agreements'),
     api.get('/invoices'),
     api.get('/notifications'),
-    approvedInstitutions()
+    approvedInstitutions(),
+    api.get('/meta')
   ]);
   const jobs = jobsRes.jobs || [];
   const apps = appsRes.applications || [];
   const profile = ctx.user.profile || {};
+  const commission = (metaRes && metaRes.commission) || { enabled: false, rate: 0, payer: 'business' };
 
   const body = `
     ${statCards([
@@ -61,6 +63,7 @@ async function overview(ctx) {
             <dt>Category</dt><dd>${esc(profile.category || '—')}</dd>
             <dt>City</dt><dd>${esc(profile.city || '—')}</dd>
             <dt>Aqama</dt><dd>${esc(profile.aqama_masked || '—')}</dd>
+            <dt>Platform commission</dt><dd>${commission.enabled ? `${commission.rate}% (paid by ${esc(commission.payer)})` : 'Not applicable'}</dd>
             <dt>Available</dt><dd>${profile.available ? 'Yes' : 'No'}</dd>
           </dl>
           <a class="btn btn-ghost btn-sm" href="#/worker/profile">Edit profile</a>
