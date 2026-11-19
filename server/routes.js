@@ -23,6 +23,15 @@ import {
   num
 } from './util.js';
 import { isValidCurrency, DEFAULT_CURRENCY } from './currency.js';
+import {
+  currentCommission,
+  commissionQuote,
+  isValidRate,
+  normalizeRate,
+  recordCommission,
+  commissionLedger,
+  commissionSummary
+} from './commission.js';
 
 const router = Router();
 
@@ -121,7 +130,16 @@ function agreementView(agreement, viewer) {
 }
 
 function invoiceView(invoice) {
-  return { ...invoice };
+  // Commission is administrator-only bookkeeping. An invoice never carries or
+  // displays commission fields.
+  const {
+    commission_applied,
+    commission_rate,
+    commission_amount,
+    commission_payer,
+    ...rest
+  } = invoice;
+  return rest;
 }
 
 /* --------------------------------------------------------------------- meta */
@@ -137,7 +155,7 @@ router.get('/meta', (req, res) => {
     institution_types: INSTITUTION_TYPES,
     pay_periods: PAY_PERIODS,
     support_email: config.supportEmail,
-    commission: settings.commission,
+    commission: currentCommission(),
     currency: settings.currency,
     default_currency: settings.currency.default,
     languages: settings.languages,
@@ -624,7 +642,28 @@ router.post('/agreements', requireRole('business', 'admin'), (req, res) => {
     signatures: {},
     created_at: nowIso()
   };
+  // Freeze the percentage in force today onto the agreement so both parties
+  // can see it, and record the matching ledger row for the administrator.
+  const quote = commissionQuote(agreement.pay_amount);
+  agreement.commission_rate = quote ? quote.rate : 0;
+  agreement.commission_amount = quote ? quote.amount : 0;
+  agreement.commission_payer = quote ? quote.payer : null;
+
   db.agreements.unshift(agreement);
+  if (quote) {
+    recordCommission({
+      docType: 'agreement',
+      docId: agreement.id,
+      ref: agreement.ref,
+      amount: agreement.pay_amount,
+      currency: agreement.currency,
+      workerId: worker.id,
+      workerName: worker.full_name,
+      businessId,
+      businessName: businessProfile.company_name,
+      actorId: req.user.id
+    });
+  }
 
   notify(
     worker.id,
@@ -753,6 +792,23 @@ router.post('/invoices', requireRole('worker', 'business'), (req, res) => {
   };
   if (!invoice.client_name) return fail(res, 400, 'missing_client', 'Client name is required.');
 
+  // Record the administrator's commission for this invoice. The entry lives in
+  // the admin ledger only; the invoice itself stays free of commission data.
+  const workerIssuer = req.user.role === 'worker';
+  const commission = recordCommission({
+    docType: 'invoice',
+    docId: invoice.id,
+    ref: invoice.serial,
+    amount: invoice.total,
+    currency: invoice.currency,
+    workerId: workerIssuer ? req.user.id : null,
+    workerName: workerIssuer ? req.user.full_name : invoice.client_name,
+    businessId: workerIssuer ? null : req.user.id,
+    businessName: workerIssuer ? invoice.client_name : invoice.issuer_name,
+    actorId: req.user.id
+  });
+  invoice.commission_applied = Boolean(commission);
+
   db.invoices.unshift(invoice);
   persist();
   res.status(201).json({ invoice: invoiceView(invoice) });
@@ -872,7 +928,8 @@ router.get('/admin/overview', requireRole('admin'), (req, res) => {
       institutions_approved: db.institutions.filter((i) => i.status === 'approved').length,
       reports_open: db.reports.filter((r) => r.status === 'open').length
     },
-    commission: db.settings.commission
+    commission: currentCommission(),
+    commission_summary: commissionSummary()
   });
 });
 
@@ -1031,27 +1088,46 @@ router.patch('/admin/reports/:id', requireRole('admin'), (req, res) => {
 });
 
 router.get('/admin/settings/commission', requireRole('admin'), (req, res) => {
-  res.json({ commission: data().settings.commission });
+  res.json({ commission: currentCommission() });
+});
+
+router.get('/admin/commissions', requireRole('admin'), (req, res) => {
+  const entries = commissionLedger();
+  res.json({ commission: currentCommission(), entries, summary: commissionSummary(entries) });
 });
 
 router.put('/admin/settings/commission', requireRole('admin'), (req, res) => {
   const body = req.body || {};
-  const enabled = Boolean(body.enabled);
-  const rate = num(body.rate, 0);
-  const payer = str(body.payer, 20) || 'business';
-  if (![0, 1, 2].includes(rate)) {
-    return fail(res, 400, 'invalid_rate', 'Commission rate must be 1% or 2% (0 when disabled).');
+  if (!isValidRate(body.rate)) {
+    return fail(
+      res,
+      400,
+      'invalid_rate',
+      'Choose a commission rate between 0% and 20% in 0.5% steps.'
+    );
   }
+  const rate = normalizeRate(body.rate);
+  const enabled = body.enabled === undefined ? rate > 0 : Boolean(body.enabled);
+  const payer = str(body.payer, 20) || 'business';
   if (!['business', 'worker', 'both'].includes(payer)) {
     return fail(res, 400, 'invalid_payer', 'Payer must be business, worker or both.');
   }
   if (enabled && rate === 0) {
-    return fail(res, 400, 'invalid_rate', 'Choose 1% or 2% when commission is enabled.');
+    return fail(res, 400, 'invalid_rate', 'Choose a rate above 0% when commission is enabled.');
   }
-  // Stored as a future setting only — no commission is ever added to a document.
-  data().settings.commission = { enabled, rate: enabled ? rate : 0, payer };
+
+  data().settings.commission = {
+    enabled,
+    rate: enabled ? rate : 0,
+    payer,
+    updated_at: nowIso()
+  };
   persist();
-  res.json({ commission: data().settings.commission, collected: false });
+  res.json({
+    commission: currentCommission(),
+    // Documents already created keep the rate they were recorded with.
+    applies_to: 'new_documents'
+  });
 });
 
 router.use((req, res) => fail(res, 404, 'not_found', 'Unknown API endpoint.'));
