@@ -1,5 +1,6 @@
 import { api } from '../api.js';
 import { esc, toast, busy, formObject } from '../ui.js';
+import { t } from '../i18n.js';
 import { options, institutionsCard } from './common.js';
 
 const PANEL_HOME = { worker: '#/worker', business: '#/business', admin: '#/admin' };
@@ -58,7 +59,7 @@ export async function homeView(ctx) {
       <a class="btn btn-ghost btn-sm" href="#/support">Open Help &amp; Support</a>
     </div>
     <p class="admin-entry"><a href="#/admin/signin">Admin Login</a></p>
-    <p class="hero-panels-note">Prototype environment — all records are demo data. Do not enter real Aqama numbers or signatures.</p>
+    <p class="hero-panels-note">Protected by role-based access — institutional contact details are never published.</p>
   </div>`;
 
   return { title: 'Home', html };
@@ -136,7 +137,7 @@ export async function institutionsView(ctx) {
           <div class="field"><label for="i-address">Address (never shown publicly)</label><input id="i-address" name="address" maxlength="300" /></div>
         </div>
         <div class="field"><label for="i-description">What support do you offer?</label><textarea id="i-description" name="description" maxlength="2000"></textarea></div>
-        <p class="sig-hint">Prototype: use test details only. Do not submit real personal information.</p>
+        <p class="sig-hint">Only approved institutions are listed. Addresses and contact details stay private.</p>
         <button class="btn btn-navy" type="submit">Submit for review</button>
       </form>
       <div id="institution-result" style="margin-top:10px"></div>
@@ -176,11 +177,6 @@ export async function authView(ctx) {
   const isSignup = mode === 'signup';
   const title = isSignup ? `Create your ${role} account` : `${role[0].toUpperCase()}${role.slice(1)} sign in`;
   const categories = (ctx.meta && ctx.meta.categories) || ['Driver', 'Laborer', 'Electrician', 'Plumber', 'Other'];
-  const demo = {
-    worker: { email: 'worker@workbridge.test', password: 'Worker#12345' },
-    business: { email: 'business@workbridge.test', password: 'Business#12345' },
-    admin: { email: 'admin@workbridge.test', password: 'Admin#12345' }
-  }[role];
 
   const signupFields =
     role === 'worker'
@@ -231,7 +227,9 @@ export async function authView(ctx) {
             ? ''
             : `<div class="field"><label for="email">Email</label><input id="email" name="email" type="email" required autocomplete="email" maxlength="160" /></div>`
         }
-        <div class="field"><label for="password">Password</label><input id="password" name="password" type="password" required minlength="8" autocomplete="${isSignup ? 'new-password' : 'current-password'}" /></div>
+        <div class="field"><label for="password">${esc(t('auth.password'))}</label><input id="password" name="password" type="password" required minlength="8" autocomplete="${isSignup ? 'new-password' : 'current-password'}" /></div>
+        ${isSignup ? '' : `<p style="margin:-6px 0 12px"><a class="link-quiet" href="#/reset-password">${esc(t('auth.forgot'))}</a></p>`}
+        ${isSignup ? '' : ''}
         ${isSignup ? '<p class="sig-hint">Prototype: use test data only. Never enter real personal information.</p>' : ''}
         <button class="btn ${role === 'worker' ? 'btn-primary' : 'btn-navy'} btn-block" type="submit">${isSignup ? 'Create account' : 'Sign in'}</button>
       </form>
@@ -247,8 +245,7 @@ export async function authView(ctx) {
       ${
         isSignup || role === 'admin'
           ? ''
-          : `<div class="notice notice-navy" style="margin-top:14px">Demo account: <strong>${esc(demo.email)}</strong> / <strong>${esc(demo.password)}</strong>
-             <div style="margin-top:6px"><button class="btn btn-ghost btn-sm" type="button" id="fill-demo">Fill demo credentials</button></div></div>`
+          : `<div class="notice" style="margin-top:14px">Signed in accounts are protected by role-based access. Passwords are stored only as salted hashes.</div>`
       }
     </div>
     ${
@@ -263,13 +260,6 @@ export async function authView(ctx) {
     html,
     mount() {
       const form = document.getElementById('auth-form');
-      const fill = document.getElementById('fill-demo');
-      if (fill) {
-        fill.addEventListener('click', () => {
-          form.elements.email.value = demo.email;
-          form.elements.password.value = demo.password;
-        });
-      }
       form.addEventListener('submit', async (event) => {
         event.preventDefault();
         const button = form.querySelector('button[type="submit"]');
@@ -277,6 +267,15 @@ export async function authView(ctx) {
         try {
           const payload = { ...formObject(form), role };
           const res = await api.post(isSignup ? '/auth/register' : '/auth/login', payload);
+          if (res.status === 'pending' || !res.user) {
+            toast(res.message || t('auth.pending'), 'success');
+            document
+              .getElementById('auth-form')
+              .insertAdjacentHTML('afterend', `<div class="notice notice-navy">${esc(res.message || t('auth.pending'))}</div>`);
+            busy(button, false);
+            form.reset();
+            return;
+          }
           ctx.setUser(res.user);
           toast(isSignup ? 'Account created' : 'Signed in', 'success');
           location.hash = PANEL_HOME[role];

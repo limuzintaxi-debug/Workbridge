@@ -1,10 +1,12 @@
 import { api } from './api.js';
-import { esc } from './ui.js';
+import { esc, setDefaultCurrency } from './ui.js';
+import { t, initLang, langSwitcher, bindLangSwitcher } from './i18n.js';
 import * as pub from './views/public.js';
 import * as worker from './views/worker.js';
 import * as business from './views/business.js';
 import * as admin from './views/admin.js';
 import * as docs from './views/docs.js';
+import * as account from './views/account.js';
 
 const state = { user: null, meta: null };
 
@@ -12,40 +14,40 @@ const PANEL_HOME = { worker: '#/worker', business: '#/business', admin: '#/admin
 
 const NAV = {
   worker: [
-    ['#/worker', 'Dashboard'],
-    ['#/worker/jobs', 'Find Work'],
-    ['#/worker/applications', 'Applications'],
-    ['#/worker/agreements', 'Agreements'],
-    ['#/worker/invoices', 'Invoices'],
-    ['#/worker/notifications', 'Alerts'],
-    ['#/worker/profile', 'Profile']
+    ['#/worker', 'nav.dashboard'],
+    ['#/worker/jobs', 'nav.findWork'],
+    ['#/worker/applications', 'nav.applications'],
+    ['#/worker/agreements', 'nav.agreements'],
+    ['#/worker/invoices', 'nav.invoices'],
+    ['#/worker/notifications', 'nav.alerts'],
+    ['#/worker/profile', 'nav.profile']
   ],
   business: [
-    ['#/business', 'Dashboard'],
-    ['#/business/jobs', 'Listings'],
-    ['#/business/jobs/new', 'Post Work'],
-    ['#/business/workers', 'Workers'],
-    ['#/business/applications', 'Applications'],
-    ['#/business/agreements', 'Agreements'],
-    ['#/business/invoices', 'Invoices'],
-    ['#/business/profile', 'Profile']
+    ['#/business', 'nav.dashboard'],
+    ['#/business/jobs', 'nav.listings'],
+    ['#/business/jobs/new', 'nav.postWork'],
+    ['#/business/workers', 'nav.workers'],
+    ['#/business/applications', 'nav.applications'],
+    ['#/business/agreements', 'nav.agreements'],
+    ['#/business/invoices', 'nav.invoices'],
+    ['#/business/profile', 'nav.profile']
   ],
   admin: [
-    ['#/admin', 'Overview'],
-    ['#/admin/users', 'Users'],
-    ['#/admin/institutions', 'Institutions'],
-    ['#/admin/listings', 'Listings'],
-    ['#/admin/documents', 'Documents'],
-    ['#/admin/reports', 'Reports'],
-    ['#/admin/settings', 'Settings']
+    ['#/admin', 'nav.overview'],
+    ['#/admin/users', 'nav.users'],
+    ['#/admin/institutions', 'nav.institutions'],
+    ['#/admin/listings', 'nav.listings'],
+    ['#/admin/documents', 'nav.documents'],
+    ['#/admin/reports', 'nav.reports'],
+    ['#/admin/settings', 'nav.settings']
   ]
 };
 
 const PUBLIC_NAV = [
-  ['#/worker/signin', 'Find Work'],
-  ['#/business/signin', 'Post Work'],
-  ['#/institutions', 'Institutions'],
-  ['#/support', 'Help']
+  ['#/worker/signin', 'nav.findWork'],
+  ['#/business/signin', 'nav.postWork'],
+  ['#/institutions', 'nav.institutions'],
+  ['#/support', 'nav.help']
 ];
 
 function topbarHtml(path) {
@@ -55,20 +57,25 @@ function topbarHtml(path) {
   return `<a class="brand" href="#/"><img src="/assets/logo.svg" alt="" /><span class="brand-name">WORK<span>BRIDGE</span></span></a>
     <nav>
       ${links
-        .map(([href, label]) => `<a href="${href}" class="${active(href)}">${esc(label)}</a>`)
+        .map(([href, key]) => `<a href="${href}" class="${active(href)}">${esc(t(key))}</a>`)
         .join('')}
+      ${langSwitcher()}
       ${
         role
-          ? `<span class="who">${esc(state.user.full_name)} · ${esc(role)}</span><button class="btn btn-ghost btn-sm" data-signout>Sign out</button>`
-          : `<a href="#/admin/signin">Admin</a>`
+          ? `<a href="#/account" class="${active('#/account')} hide-sm">${esc(t('auth.account'))}</a><span class="who">${esc(
+              state.user.full_name
+            )} · ${esc(role)}</span><button class="btn btn-ghost btn-sm" data-signout>${esc(t('nav.signOut'))}</button>`
+          : `<a href="#/admin/signin">${esc(t('nav.admin'))}</a>`
       }
     </nav>`;
 }
 
 function footerHtml() {
-  return `<div>WORKBRIDGE — Booking • Agreement • Institutional &amp; Social Support • Invoice Maker</div>
-    <div style="margin-top:6px">Help &amp; Support: <a href="mailto:Limuzin@196vip.si">Limuzin@196vip.si</a> · <a href="#/institutions">Institutional &amp; Social Support</a></div>
-    <div class="muted" style="margin-top:6px;font-size:0.75rem">Prototype environment — demo data only.</div>`;
+  return `<div>WORKBRIDGE — ${esc(t('brand.tagline'))}</div>
+    <div style="margin-top:6px">Help &amp; Support: <a href="mailto:Limuzin@196vip.si">Limuzin@196vip.si</a> · <a href="#/institutions">${esc(
+      t('home.institutionTitle')
+    )}</a></div>
+    <div class="muted" style="margin-top:6px;font-size:0.75rem">© ${new Date().getFullYear()} WORKBRIDGE</div>`;
 }
 
 function ctxFor(parts, query) {
@@ -106,6 +113,8 @@ async function route(path, parts, query) {
   if (path === '/') return pub.homeView(ctx);
   if (path === '/support') return pub.supportView(ctx);
   if (path === '/institutions') return pub.institutionsView(ctx);
+  if (path === '/reset-password') return account.resetPasswordView(ctx);
+  if (path === '/setup') return account.setupView(ctx);
 
   const authMatch = path.match(/^\/(worker|business|admin)\/(signin|signup)$/);
   if (authMatch) {
@@ -115,6 +124,9 @@ async function route(path, parts, query) {
   if (parts[0] === 'worker') return guard('worker', ctx) || worker.view(ctx);
   if (parts[0] === 'business') return guard('business', ctx) || business.view(ctx);
   if (parts[0] === 'admin') return guard('admin', ctx) || admin.view(ctx);
+  if (path === '/account') {
+    return guardAny(['worker', 'business', 'admin'], ctx) || account.accountView(ctx);
+  }
   if (parts[0] === 'agreements') {
     return guardAny(['worker', 'business', 'admin'], ctx) || docs.agreementView(ctx);
   }
@@ -177,6 +189,7 @@ async function render() {
     const container = document.getElementById('view');
     container.innerHTML = view.html || '';
     document.getElementById('topbar').innerHTML = topbarHtml(path);
+    bindLangSwitcher(document.getElementById('topbar'), () => render());
     document.getElementById('footer').innerHTML = footerHtml();
     document.title = view.title
       ? `${view.title} · WORKBRIDGE`
@@ -223,6 +236,9 @@ async function loadMeta() {
       commission: { enabled: false, rate: 0, payer: 'business' }
     };
   }
+  const meta = state.meta || {};
+  setDefaultCurrency((meta.currency && meta.currency.default) || meta.default_currency || 'SAR');
+  initLang((meta.languages && meta.languages.default) || 'en');
 }
 
 window.addEventListener('hashchange', render);
