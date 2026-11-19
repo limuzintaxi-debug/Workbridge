@@ -326,8 +326,76 @@ async function reports(ctx) {
 }
 
 async function settings(ctx) {
-  const { commission } = await api.get('/admin/settings/commission');
-  const body = `<div class="card">
+  const [{ commission }, platform] = await Promise.all([
+    api.get('/admin/settings/commission'),
+    api.get('/admin/settings')
+  ]);
+  const currencySettings = (platform.settings && platform.settings.currency) || { default: 'SAR', enabled: ['SAR'] };
+  const registration = (platform.settings && platform.settings.registration) || { worker: 'auto', business: 'auto' };
+  const catalog = platform.currencies || [];
+  const enabledSet = new Set(currencySettings.enabled || []);
+  const drivers = platform.drivers || {};
+
+  const currencyCard = `<div class="card">
+    <h2>Currency</h2>
+    <p class="muted">The default currency is applied to new agreements, invoices and listings. Enable only the currencies your users need.</p>
+    <form id="currency-form">
+      <div class="field"><label for="default_currency">Default currency</label>
+        <select id="default_currency" name="default">
+          ${catalog
+            .map(
+              (c) =>
+                `<option value="${esc(c.code)}"${c.code === currencySettings.default ? ' selected' : ''}>${esc(c.code)} — ${esc(
+                  c.name || c.code
+                )}</option>`
+            )
+            .join('')}
+        </select>
+      </div>
+      <div class="field"><label>Enabled currencies</label>
+        <div class="currency-grid">
+          ${catalog
+            .map(
+              (c) => `<label class="currency-check"><input type="checkbox" name="enabled" value="${esc(
+                c.code
+              )}"${enabledSet.has(c.code) ? ' checked' : ''} /> <span>${esc(c.code)}</span></label>`
+            )
+            .join('')}
+        </div>
+      </div>
+      <button class="btn btn-navy" type="submit">Save currency settings</button>
+    </form>
+  </div>`;
+
+  const modeSelect = (name, value) => `<select id="${name}_mode" name="${name}">
+      <option value="auto"${value === 'auto' ? ' selected' : ''}>Automatic approval</option>
+      <option value="review"${value === 'review' ? ' selected' : ''}>Admin review</option>
+    </select>`;
+
+  const registrationCard = `<div class="card">
+    <h2>Registration approval</h2>
+    <p class="muted">Decide whether new accounts can sign in immediately or wait for an administrator decision. Institutions always require review.</p>
+    <form id="registration-form">
+      <div class="form-row two">
+        <div class="field"><label for="worker_mode">Workers</label>${modeSelect('worker', registration.worker)}</div>
+        <div class="field"><label for="business_mode">Businesses</label>${modeSelect('business', registration.business)}</div>
+      </div>
+      <button class="btn btn-navy" type="submit">Save registration settings</button>
+    </form>
+  </div>`;
+
+  const infrastructureCard = `<div class="card">
+    <h2>Infrastructure</h2>
+    <p class="muted">Storage driver: <strong>${esc(drivers.persistence || 'unknown')}</strong> · Authentication: <strong>${esc(
+    drivers.auth || 'unknown'
+  )}</strong></p>
+    <p class="muted">Supabase configured: <strong>${platform.setup && platform.setup.supabase_configured ? 'yes' : 'no'}</strong> · Administrator account: <strong>${
+    platform.setup && platform.setup.admin_exists ? 'created' : 'missing'
+  }</strong></p>
+    <p class="sig-hint">Set Supabase credentials in the server environment to move all storage to the managed database. See docs/SUPABASE.md.</p>
+  </div>`;
+
+  const body = `${currencyCard}${registrationCard}<div class="card">
     <h2>Commission settings</h2>
     <p class="muted">Commission is a future option and is <strong>off by default</strong>. Nothing is collected now and no document adds a commission line.</p>
     <form id="commission-form">
@@ -354,8 +422,47 @@ async function settings(ctx) {
 
   return {
     title: 'Settings',
-    html: shell('/admin/settings', 'Platform settings', 'Commission remains off until you enable it.', body),
+    html: shell('/admin/settings', 'Platform settings', 'Currency, registration approval and commission.', body),
     mount() {
+      const currencyForm = document.getElementById('currency-form');
+      currencyForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const button = currencyForm.querySelector('button[type="submit"]');
+        const enabled = [...currencyForm.querySelectorAll('input[name="enabled"]:checked')].map((input) => input.value);
+        busy(button, true, 'Saving…');
+        try {
+          const res = await api.put('/admin/settings/currency', {
+            default: currencyForm.elements.default.value,
+            enabled
+          });
+          toast('Currency settings saved', 'success');
+          await ctx.refresh();
+          return res;
+        } catch (error) {
+          toast(error.message, 'error');
+        } finally {
+          busy(button, false);
+        }
+      });
+
+      const registrationForm = document.getElementById('registration-form');
+      registrationForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const button = registrationForm.querySelector('button[type="submit"]');
+        busy(button, true, 'Saving…');
+        try {
+          await api.put('/admin/settings/registration', {
+            worker: registrationForm.elements.worker.value,
+            business: registrationForm.elements.business.value
+          });
+          toast('Registration settings saved', 'success');
+        } catch (error) {
+          toast(error.message, 'error');
+        } finally {
+          busy(button, false);
+        }
+      });
+
       const form = document.getElementById('commission-form');
       form.addEventListener('submit', async (event) => {
         event.preventDefault();

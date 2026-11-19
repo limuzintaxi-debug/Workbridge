@@ -147,7 +147,7 @@ async function jobDetail(ctx, id) {
         </div>
         <div style="text-align:right">${ageBadge(job)}<div style="margin-top:4px">${pill(job.status)}</div></div>
       </div>
-      <p><strong>${money(job.pay_amount)} / ${esc(job.pay_period)}</strong></p>
+      <p><strong>${money(job.pay_amount, job.currency)} / ${esc(job.pay_period)}</strong></p>
       <h3>Description</h3>
       <p style="white-space:pre-wrap">${esc(job.description)}</p>
       ${job.requirements ? `<h3>Requirements</h3><p style="white-space:pre-wrap">${esc(job.requirements)}</p>` : ''}

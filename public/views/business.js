@@ -89,7 +89,7 @@ async function jobs(ctx) {
             </div>
             <div style="text-align:right">${ageBadge(job)}<div style="margin-top:4px">${pill(job.status)}</div></div>
           </header>
-          <div class="job-pay">${money(job.pay_amount)} / ${esc(job.pay_period)}</div>
+          <div class="job-pay">${money(job.pay_amount, job.currency)} / ${esc(job.pay_period)}</div>
           <div class="btn-row">
             <a class="btn btn-ghost btn-sm" href="#/business/jobs/${esc(job.id)}">Applicants</a>
             ${
@@ -186,7 +186,7 @@ async function jobDetail(ctx, id) {
         <div style="text-align:right">${ageBadge(job)}<div style="margin-top:4px">${pill(job.status)}</div></div>
       </div>
       <p style="white-space:pre-wrap">${esc(job.description)}</p>
-      <p><strong>${money(job.pay_amount)} / ${esc(job.pay_period)}</strong></p>
+      <p><strong>${money(job.pay_amount, job.currency)} / ${esc(job.pay_period)}</strong></p>
       ${job.status === 'open' ? `<button class="btn btn-danger btn-sm" id="close-job">Close listing</button>` : ''}
     </div>
     <div class="card">

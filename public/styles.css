@@ -271,3 +271,31 @@ table.invoice-table th, table.invoice-table td { border-bottom: 1px solid var(--
   a { color: var(--ink); text-decoration: none; }
   @page { margin: 14mm; }
 }
+
+/* ---------- language switcher, currency picker, signature status ---------- */
+.lang-switch { display: inline-flex; gap: 2px; border: 1px solid var(--line, #e5e7eb); border-radius: 999px; padding: 2px; }
+.lang-switch button { border: 0; background: transparent; font: inherit; font-size: 0.72rem; padding: 4px 8px; border-radius: 999px; cursor: pointer; color: var(--muted, #6b7280); }
+.lang-switch button.active { background: var(--navy, #0b1f3a); color: #fff; }
+.currency-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 6px; }
+.currency-check { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; padding: 6px; border: 1px solid var(--line, #e5e7eb); border-radius: 8px; }
+.currency-check input { width: auto; min-height: 0; margin: 0; }
+.sig-status { font-size: 0.78rem; font-weight: 600; color: #9a3412; background: #fff7ed; border-radius: 6px; padding: 6px 10px; display: inline-block; margin-bottom: 10px; }
+.sig-status-done { color: #065f46; background: #ecfdf5; }
+.hide-sm { display: none; }
+@media (min-width: 720px) { .hide-sm { display: inline-block; } }
+
+/* ---------- Arabic right-to-left layout ---------- */
+html[dir="rtl"] body { text-align: right; }
+html[dir="rtl"] .topbar nav,
+html[dir="rtl"] .job-head,
+html[dir="rtl"] .doc-head,
+html[dir="rtl"] .btn-row { flex-direction: row-reverse; }
+html[dir="rtl"] .topbar .who { margin-left: 0; margin-right: 6px; }
+html[dir="rtl"] .doc-table .num,
+html[dir="rtl"] .num { text-align: left; }
+html[dir="rtl"] .doc-table th,
+html[dir="rtl"] .doc-table td { text-align: right; }
+html[dir="rtl"] .doc-table .num { text-align: left; }
+html[dir="rtl"] .hero-panels,
+html[dir="rtl"] .stats,
+html[dir="rtl"] .split { direction: rtl; }
