@@ -158,9 +158,20 @@ function errorView(error) {
 }
 
 let rendering = false;
+let pendingRender = false;
+let renderedHash = null;
+
+function currentHash() {
+  return location.hash || '#/';
+}
 
 async function render() {
-  if (rendering) return;
+  // A navigation that arrives while a render is in flight must never be dropped:
+  // queue it and run again as soon as the current render has finished.
+  if (rendering) {
+    pendingRender = true;
+    return;
+  }
   rendering = true;
   try {
     const raw = location.hash.replace(/^#/, '') || '/';
@@ -181,8 +192,12 @@ async function render() {
     }
 
     if (view && view.redirect) {
-      if (location.hash !== view.redirect) location.hash = view.redirect;
-      rendering = false;
+      if (location.hash !== view.redirect) {
+        location.hash = view.redirect;
+      } else {
+        // Already on the redirect target: record it so we do not loop.
+        renderedHash = currentHash();
+      }
       return;
     }
 
@@ -194,6 +209,7 @@ async function render() {
     document.title = view.title
       ? `${view.title} · WORKBRIDGE`
       : 'WORKBRIDGE — Booking • Agreement • Institutional & Social Support • Invoice Maker';
+    renderedHash = currentHash();
 
     for (const button of document.querySelectorAll('[data-signout]')) {
       button.addEventListener('click', async () => {
@@ -212,6 +228,11 @@ async function render() {
     if (typeof view.mount === 'function') await view.mount();
   } finally {
     rendering = false;
+    // Safety net: if the URL changed while we were rendering, render it now.
+    if (pendingRender || currentHash() !== renderedHash) {
+      pendingRender = false;
+      render().catch(() => {});
+    }
   }
 }
 
@@ -242,7 +263,20 @@ async function loadMeta() {
 }
 
 window.addEventListener('hashchange', render);
+
+// Clean paths (for example /setup) are served the app shell by the server, so map
+// them onto the hash router to keep deep links working.
+const DEEP_LINK = /^\/(setup|support|institutions|reset-password|account|worker|business|admin|agreements|invoices)(\/|$)/;
+
+function normalizeDeepLink() {
+  if (location.hash && location.hash !== '#') return;
+  const pathname = location.pathname.replace(/\/+$/, '');
+  if (!pathname || pathname === '/' || !DEEP_LINK.test(pathname)) return;
+  history.replaceState(null, '', `${pathname}#${pathname}`);
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
+  normalizeDeepLink();
   await Promise.all([loadSession(), loadMeta()]);
   await render();
 });

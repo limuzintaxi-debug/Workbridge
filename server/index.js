@@ -64,8 +64,29 @@ if (!supabaseConfigured()) {
   );
 }
 
-const server = app.listen(config.port, '0.0.0.0', () => {
-  console.log(`[workbridge] listening on http://0.0.0.0:${config.port}`);
+const port = Number(config.port);
+if (!Number.isInteger(port) || port < 1 || port > 65535) {
+  console.error(`[workbridge] invalid PORT "${process.env.PORT ?? ''}" — expected a number between 1 and 65535.`);
+  process.exit(1);
+}
+
+// Bind every interface on the platform-provided port. Binding to localhost makes the
+// container unreachable and surfaces as ECONNREFUSED during the deployment probe.
+const server = app.listen(port, '0.0.0.0', () => {
+  console.log(`[workbridge] listening on http://0.0.0.0:${port} (PORT=${process.env.PORT || 'unset, default 3000'})`);
+});
+
+server.on('error', (error) => {
+  if (error && error.code === 'EADDRINUSE') {
+    console.error(`[workbridge] port ${port} is already in use. Set PORT to the port the platform expects.`);
+  } else if (error && error.code === 'EACCES') {
+    console.error(
+      `[workbridge] permission denied binding port ${port}. The container runs as a non-root user, so use a port above 1024 (for example 3000).`
+    );
+  } else {
+    console.error('[workbridge] server error:', error);
+  }
+  process.exit(1);
 });
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
