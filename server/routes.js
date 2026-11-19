@@ -613,6 +613,9 @@ router.post('/agreements', requireRole('business', 'admin'), (req, res) => {
     end_date: str(body.end_date, 20) || null,
     pay_amount: round2(num(body.pay_amount, 0)),
     pay_period: PAY_PERIODS.includes(str(body.pay_period, 20)) ? str(body.pay_period, 20) : 'month',
+    currency: isValidCurrency(str(body.currency, 8).toUpperCase())
+      ? str(body.currency, 8).toUpperCase()
+      : db.settings.currency.default,
     status: 'pending_signatures',
     signatures: {},
     created_at: nowIso()
