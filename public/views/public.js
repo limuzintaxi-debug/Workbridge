@@ -16,12 +16,11 @@ export async function homeView(ctx) {
 
   const html = `
   <section class="hero">
-    <img class="hero-logo" src="/assets/logo.svg" alt="WORKBRIDGE logo" width="340" height="120" />
+    <img class="hero-logo" src="/assets/logo.svg" alt="WORKBRIDGE logo" width="132" height="132" />
     <h1 class="hero-title">WORKBRIDGE</h1>
     <p class="tagline">Booking • Agreement • Institutional &amp; Social Support • Invoice Maker</p>
     <p class="hero-sub">Connecting Workers, Businesses &amp; Support Organizations</p>
     <p class="hero-actions">Find Work • Make Agreements • Create Invoices</p>
-    <img class="hero-icon" src="/assets/icon.svg" alt="Red and white global network globe with the WR mark and a black and white handshake" width="200" height="200" />
   </section>
 
   <div class="panels">
