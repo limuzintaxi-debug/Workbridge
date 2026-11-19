@@ -22,6 +22,7 @@ import {
   str,
   num
 } from './util.js';
+import { isValidCurrency, DEFAULT_CURRENCY } from './currency.js';
 
 const router = Router();
 
@@ -126,12 +127,17 @@ router.get('/health', (req, res) => {
 });
 
 router.get('/meta', (req, res) => {
+  const settings = data().settings;
   res.json({
     categories: CATEGORIES,
     institution_types: INSTITUTION_TYPES,
     pay_periods: PAY_PERIODS,
     support_email: config.supportEmail,
-    commission: data().settings.commission
+    commission: settings.commission,
+    currency: settings.currency,
+    default_currency: settings.currency.default,
+    languages: settings.languages,
+    registration: settings.registration
   });
 });
 
@@ -176,7 +182,7 @@ router.post('/auth/register', (req, res) => {
     password_hash: hashPassword(password),
     full_name: fullName,
     phone,
-    status: 'active',
+    status: data().settings.registration[role] === 'review' ? 'pending' : 'active',
     created_at: nowIso()
   };
 
@@ -708,7 +714,9 @@ router.post('/invoices', requireRole('worker', 'business'), (req, res) => {
     client_phone: str(body.client_phone, 40),
     client_address: str(body.client_address, 300),
     client_country: str(body.client_country, 80),
-    currency: str(body.currency, 8) || 'AED',
+    currency: isValidCurrency(str(body.currency, 8).toUpperCase())
+      ? str(body.currency, 8).toUpperCase()
+      : data().settings.currency.default,
     items: cleanItems,
     vat_rate: vatRate,
     subtotal,
