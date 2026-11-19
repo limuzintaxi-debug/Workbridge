@@ -25,9 +25,21 @@ export function fmtDateTime(iso) {
   })} ${d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
-export function money(amount, currency = 'AED') {
+let defaultCurrency = 'SAR';
+
+/** The administrator-configured platform currency, set from /meta on boot. */
+export function setDefaultCurrency(code) {
+  if (code) defaultCurrency = String(code).toUpperCase();
+}
+
+export function getDefaultCurrency() {
+  return defaultCurrency;
+}
+
+export function money(amount, currency) {
+  const code = currency || defaultCurrency;
   const n = Number(amount || 0);
-  return `${currency} ${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `${code} ${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export function ageBadge(job) {
@@ -160,8 +172,9 @@ export function readImageFile(file) {
   });
 }
 
-export function money0(amount, currency = 'AED') {
-  return `${currency} ${Number(amount || 0).toLocaleString('en-US', {
+export function money0(amount, currency) {
+  const code = currency || defaultCurrency;
+  return `${code} ${Number(amount || 0).toLocaleString('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   })}`;

@@ -53,8 +53,6 @@ export function isKnownCurrency(code) {
 
 /** Alias used by the route layer. */
 export const isValidCurrency = isKnownCurrency;
-  return CATALOG_BY_CODE.has(String(code || '').toUpperCase());
-}
 
 export function currencyMeta(code) {
   return CATALOG_BY_CODE.get(String(code || '').toUpperCase()) || null;
