@@ -903,8 +903,8 @@ router.patch('/admin/users/:id', requireRole('admin'), (req, res) => {
     }
     user.status = status;
     if (status === 'active') user.approved_at = nowIso();
-    // Suspending ends existing sessions immediately.
-    if (status === 'suspended') user.session_epoch = (user.session_epoch || 0) + 1;
+    // Suspension ends existing sessions because middleware only accepts an
+    // 'active' account; reactivating lets the same user sign in again.
   }
 
   if (body.full_name !== undefined) {
