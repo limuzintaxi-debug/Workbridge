@@ -48,6 +48,11 @@ const CATALOG_BY_CODE = new Map(CURRENCY_CATALOG.map((c) => [c.code, c]));
 const DEFAULT_ENABLED = ['SAR', 'AED', 'USD', 'EUR', 'GBP', 'QAR', 'KWD', 'EGP', 'PKR', 'INR', 'BDT', 'PHP'];
 
 export function isKnownCurrency(code) {
+  return CURRENCY_CATALOG.some((c) => c.code === String(code || '').toUpperCase());
+}
+
+/** Alias used by the route layer. */
+export const isValidCurrency = isKnownCurrency;
   return CATALOG_BY_CODE.has(String(code || '').toUpperCase());
 }
 
