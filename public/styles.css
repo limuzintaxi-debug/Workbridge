@@ -262,6 +262,11 @@ table.invoice-table th, table.invoice-table td { border-bottom: 1px solid var(--
 .stamp-box img { max-height: 68px; max-width: 100%; }
 
 /* ------------------------------------------------------------------- print */
+/* ---------- document signatures and stamps ---------- */
+.doc-signature .sig-line { display: flex; align-items: flex-end; justify-content: center; min-height: 64px; }
+.doc-signature .sig-line img { max-height: 64px; max-width: 100%; object-fit: contain; }
+@media print { .doc-signature .sig-line img { max-height: 56px; } }
+
 @media print {
   .topbar, .footer, .no-print, .subnav, .toast, .skip-link { display: none !important; }
   body { background: #fff; }
