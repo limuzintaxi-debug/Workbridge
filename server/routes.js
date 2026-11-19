@@ -784,7 +784,9 @@ router.post('/institutions', (req, res) => {
   });
 });
 
-router.get('/institutions', requireRole('worker', 'business', 'admin'), (req, res) => {
+// Public on purpose: only approved names/types are ever exposed. Contact
+// details and addresses stay behind the admin-only endpoint.
+router.get('/institutions', (req, res) => {
   const approved = data()
     .institutions.filter((i) => i.status === 'approved')
     .map((i) => ({ id: i.id, name: i.name, type: i.type }));

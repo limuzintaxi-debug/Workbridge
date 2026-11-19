@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 120" role="img" aria-label="WORKBRIDGE">
+  <title>WORKBRIDGE</title>
+  <!-- Navy W -->
+  <path d="M14 34 L46 96 L80 50 L114 96 L146 34" fill="none" stroke="#0b1f3a" stroke-width="17" stroke-linecap="square" stroke-linejoin="miter" />
+  <!-- Orange R -->
+  <path d="M176 96 L176 34 L212 34 Q240 34 240 58 Q240 82 212 82 L176 82 M212 82 L246 96" fill="none" stroke="#f58220" stroke-width="17" stroke-linejoin="round" />
+  <!-- Orange swoosh passing through the W -->
+  <path d="M4 92 C74 120 168 14 302 22" fill="none" stroke="#f58220" stroke-width="8" stroke-linecap="round" opacity="0.95" />
+</svg>
