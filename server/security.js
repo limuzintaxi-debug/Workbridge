@@ -64,7 +64,11 @@ export function parseCookies(header) {
 }
 
 export function setSessionCookie(req, res, user) {
-  const token = signSession({ uid: user.id, role: user.role });
+  const token = signSession({
+    uid: user.id,
+    role: user.role,
+    epoch: user.session_epoch || 0
+  });
   const secure = req.secure || req.headers['x-forwarded-proto'] === 'https';
   res.cookie(COOKIE, token, {
     httpOnly: true,
