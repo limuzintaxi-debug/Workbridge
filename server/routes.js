@@ -53,6 +53,7 @@ function sessionPayload(user) {
 function jobView(job, viewer) {
   const db = data();
   const business = db.businessProfiles.find((b) => b.user_id === job.business_id);
+  const owner = db.users.find((u) => u.id === job.business_id);
   const applications = db.applications.filter((a) => a.job_id === job.id);
   const bucket = ageBucket(job.created_at);
   return {
@@ -73,7 +74,10 @@ function jobView(job, viewer) {
     business: {
       id: job.business_id,
       company_name: business?.company_name || 'Business',
-      country: business?.country || ''
+      contact_name: business?.contact_name || owner?.full_name || '',
+      country: business?.country || '',
+      // Workers contact the business directly about a vacancy.
+      phone: business?.phone || owner?.phone || ''
     },
     application_count: applications.length,
     my_application:
@@ -886,14 +890,79 @@ router.get('/admin/users', requireRole('admin'), (req, res) => {
 });
 
 router.patch('/admin/users/:id', requireRole('admin'), (req, res) => {
-  const user = data().users.find((u) => u.id === req.params.id && u.role !== 'admin');
+  const db = data();
+  const user = db.users.find((u) => u.id === req.params.id && u.role !== 'admin');
   if (!user) return fail(res, 404, 'not_found', 'Account not found.');
-  const status = str((req.body || {}).status, 20);
-  if (!['active', 'pending', 'suspended', 'rejected'].includes(status)) {
-    return fail(res, 400, 'invalid_status', 'Choose approved, pending, rejected or suspended.');
+  const body = req.body || {};
+
+  const status = str(body.status, 20);
+  if (status) {
+    if (!['active', 'pending', 'suspended', 'rejected'].includes(status)) {
+      return fail(res, 400, 'invalid_status', 'Choose approved, pending, rejected or suspended.');
+    }
+    user.status = status;
+    if (status === 'active') user.approved_at = nowIso();
+    // Suspending ends existing sessions immediately.
+    if (status === 'suspended') user.session_epoch = (user.session_epoch || 0) + 1;
   }
-  user.status = status;
-  if (status === 'active') user.approved_at = nowIso();
+
+  if (body.full_name !== undefined) {
+    const fullName = str(body.full_name, 120);
+    if (!fullName) return fail(res, 400, 'missing_name', 'Full name is required.');
+    user.full_name = fullName;
+  }
+  if (body.phone !== undefined) {
+    const phone = str(body.phone, 40);
+    if (!phone) return fail(res, 400, 'missing_phone', 'Phone number is required.');
+    user.phone = phone;
+  }
+  if (body.email !== undefined) {
+    const email = str(body.email, 160).toLowerCase();
+    if (!isEmail(email)) return fail(res, 400, 'invalid_email', 'Enter a valid email address.');
+    if (db.users.some((u) => u.id !== user.id && u.email === email)) {
+      return fail(res, 409, 'email_taken', 'Another account already uses that email.');
+    }
+    user.email = email;
+  }
+
+  if (user.role === 'worker') {
+    const profile = db.workerProfiles.find((p) => p.user_id === user.id);
+    if (profile) {
+      if (body.category !== undefined) {
+        const category = str(body.category, 60);
+        if (!CATEGORIES.includes(category)) {
+          return fail(res, 400, 'invalid_category', 'Choose a valid work category.');
+        }
+        profile.category = category;
+      }
+      if (body.city !== undefined) profile.city = str(body.city, 120);
+      if (body.bio !== undefined) profile.bio = str(body.bio, 1000);
+      if (body.experience_years !== undefined) {
+        profile.experience_years = Math.max(0, Math.min(60, num(body.experience_years, 0)));
+      }
+      if (body.available !== undefined) profile.available = Boolean(body.available);
+      if (body.skills !== undefined) {
+        const list = Array.isArray(body.skills) ? body.skills : String(body.skills).split(',');
+        profile.skills = list.map((s) => str(s, 60)).filter(Boolean).slice(0, 20);
+      }
+    }
+  } else {
+    const profile = db.businessProfiles.find((p) => p.user_id === user.id);
+    if (profile) {
+      if (body.company_name !== undefined) {
+        profile.company_name = str(body.company_name, 160) || profile.company_name;
+      }
+      if (body.contact_name !== undefined) {
+        profile.contact_name = str(body.contact_name, 120) || user.full_name;
+      }
+      if (body.phone !== undefined) profile.phone = user.phone;
+      if (body.country !== undefined) profile.country = str(body.country, 80);
+      if (body.address !== undefined) profile.address = str(body.address, 300);
+      if (body.website !== undefined) profile.website = str(body.website, 200);
+      if (body.about !== undefined) profile.about = str(body.about, 1000);
+    }
+  }
+
   persist();
   res.json({ user: publicUser(user, profileFor(user)) });
 });

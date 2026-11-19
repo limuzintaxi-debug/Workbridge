@@ -186,6 +186,41 @@ router.patch('/auth/password', requireRole('worker', 'business', 'admin'), (req,
   res.json({ ok: true, message: 'Password updated.' });
 });
 
+/* --------------------------------------------- admin: password reset help */
+
+// Fallback when a worker or business cannot complete self-service recovery:
+// the administrator issues a single-use link (never sets a password directly).
+router.post('/admin/users/:id/reset-link', requireRole('admin'), (req, res) => {
+  const db = data();
+  const user = db.users.find((u) => u.id === req.params.id && u.role !== 'admin');
+  if (!user) return fail(res, 404, 'not_found', 'Account not found.');
+
+  const token = crypto.randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + RESET_TTL_MS).toISOString();
+  db.resetTokens = db.resetTokens.filter(
+    (t) => new Date(t.expires_at).getTime() > Date.now() && !t.used_at
+  );
+  db.resetTokens.unshift({
+    id: id(),
+    user_id: user.id,
+    token_hash: sha256(token),
+    expires_at: expiresAt,
+    used_at: null,
+    created_at: nowIso(),
+    issued_by: req.user.id
+  });
+  audit(req.user.id, 'admin.password_reset_issued', user.email);
+  persist();
+
+  res.json({
+    ok: true,
+    email: user.email,
+    expires_at: expiresAt,
+    reset_url: `${publicOrigin(req)}/#/reset-password?token=${token}`,
+    message: 'Share this single-use link with the account holder. It expires in 30 minutes.'
+  });
+});
+
 /* ------------------------------------------------------- admin: settings */
 
 router.get('/admin/settings', requireRole('admin'), (req, res) => {
