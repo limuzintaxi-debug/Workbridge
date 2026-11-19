@@ -557,6 +557,26 @@ create policy app_settings_admin_write on public.app_settings
   using (public.is_admin())
   with check (public.is_admin());
 
+-- commissions: administrator-only ledger. The server writes one row each time
+-- an agreement or invoice is created while commission is enabled, freezing the
+-- percentage used at that moment. No client policy is granted: only the server
+-- (service role) reads it, and an invoice never carries commission data.
+create table if not exists public.commissions (
+  id          text primary key,
+  doc         jsonb not null,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
+  doc_type    text generated always as (doc->>'doc_type') stored,
+  currency    text generated always as (doc->>'currency') stored
+);
+
+alter table public.commissions enable row level security;
+
+drop policy if exists commissions_admin_read on public.commissions;
+create policy commissions_admin_read on public.commissions
+  for select to authenticated
+  using (public.is_admin());
+
 -- ------------------------------------------------- public institution list ---
 -- The only public institutional surface: approved names and types.
 -- Addresses, phones and contact people are never selected here.
