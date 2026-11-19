@@ -175,6 +175,19 @@ export async function authView(ctx) {
 
   const isSignup = mode === 'signup';
   const title = isSignup ? `Create your ${role} account` : `${role[0].toUpperCase()}${role.slice(1)} sign in`;
+
+  // The administrator account is never created by public registration. When no
+  // administrator exists yet, the sign-in page must point at the first-run form
+  // instead of leaving the owner with a form that can never succeed.
+  let setupRequired = false;
+  if (role === 'admin' && !isSignup) {
+    try {
+      const status = await api.get('/setup/status');
+      setupRequired = Boolean(status && status.setup_required);
+    } catch (error) {
+      setupRequired = false;
+    }
+  }
   const categories = (ctx.meta && ctx.meta.categories) || ['Driver', 'Laborer', 'Electrician', 'Plumber', 'Other'];
 
   const signupFields =
@@ -216,7 +229,11 @@ export async function authView(ctx) {
       <h1>${esc(title)}</h1>
       ${
         role === 'admin'
-          ? `<div class="notice notice-navy">Admin accounts are created by the platform owner. There is no public admin registration.</div>`
+          ? `<div class="notice notice-navy">Admin accounts are created by the platform owner. There is no public admin registration.${
+              setupRequired
+                ? ' No administrator exists yet — <a href="#/setup">create the administrator account</a> to enable sign-in.'
+                : ''
+            }</div>`
           : `<p class="muted">${isSignup ? 'All fields marked required must be completed.' : 'Sign in with the email and password you registered with.'}</p>`
       }
       <form id="auth-form" novalidate style="margin-top:12px">
