@@ -130,6 +130,29 @@ try {
     assert.equal(res.json.error, 'role_not_allowed');
   });
 
+  await step('first administrator is created through the setup endpoint', async () => {
+    const status = await anon.get('/api/setup/status');
+    assert.equal(status.status, 200);
+    assert.equal(status.json.setup_required, true, 'a fresh install must require setup');
+
+    const created = await admin.post('/api/setup/admin', {
+      email: 'admin@workbridge.test',
+      password: 'Admin#12345',
+      full_name: 'Platform Admin'
+    });
+    assert.equal(created.status, 201, created.text);
+
+    const second = await anon.post('/api/setup/admin', {
+      email: 'second-admin@workbridge.test',
+      password: 'Another#12345',
+      full_name: 'Second Admin'
+    });
+    assert.equal(second.status, 409, 'setup must close once an administrator exists');
+
+    const after = await anon.get('/api/setup/status');
+    assert.equal(after.json.setup_required, false);
+  });
+
   await step('worker registers with Aqama and skill category', async () => {
     const res = await worker.post('/api/auth/register', {
       role: 'worker',
