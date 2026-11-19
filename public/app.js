@@ -154,7 +154,7 @@ async function render() {
     const raw = location.hash.replace(/^#/, '') || '/';
     const [pathPart, queryPart] = raw.split('?');
     const path = pathPart || '/';
-    const query = Object.fromEntries(new URLSearchParams(queryPart || ''));
+    const query = new URLSearchParams(queryPart || '');
     const parts = path.split('/').filter(Boolean);
 
     let view;
