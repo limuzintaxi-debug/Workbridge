@@ -4,6 +4,7 @@ import { config, supabaseConfigured } from './config.js';
 import { initStore } from './store.js';
 import { attachSession } from './middleware.js';
 import api from './routes.js';
+import accountRoutes from './routes-account.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -18,7 +19,12 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use('/api', accountRoutes);
 app.use('/api', api);
+
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true, service: 'workbridge', time: new Date().toISOString() });
+});
 
 const publicDir = path.join(config.root, 'public');
 app.use(
@@ -53,8 +59,8 @@ await initStore();
 
 if (!supabaseConfigured()) {
   console.warn(
-    '[workbridge] Supabase credentials not found — running on the local demo store (data/db.json). ' +
-      'Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to switch after running supabase/schema.sql.'
+    '[workbridge] Supabase credentials not found — using the local JSON persistence driver. ' +
+      'Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY, then run supabase/schema.sql, for production storage.'
   );
 }
 

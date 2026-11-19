@@ -10,7 +10,9 @@ export function attachSession(req, res, next) {
     const payload = verifySession(token);
     if (payload) {
       const user = data().users.find((u) => u.id === payload.uid);
-      if (user && user.status === 'active') {
+      // A password change bumps session_epoch, which invalidates older cookies.
+      const epochMatches = (user?.session_epoch || 0) === (payload.epoch || 0);
+      if (user && user.status === 'active' && epochMatches) {
         req.user = user;
         req.session = payload;
       }
