@@ -16,6 +16,14 @@ export const config = {
   adminEmail: (process.env.ADMIN_EMAIL || '').trim().toLowerCase(),
   adminPassword: process.env.ADMIN_PASSWORD || '',
   setupToken: process.env.SETUP_TOKEN || '',
+  // SMTP for password-recovery email. Gmail works with an app password.
+  smtpHost: process.env.SMTP_HOST || '',
+  smtpPort: Number(process.env.SMTP_PORT || 587),
+  smtpSecure:
+    process.env.SMTP_SECURE === 'true' || Number(process.env.SMTP_PORT || 587) === 465,
+  smtpUser: process.env.SMTP_USER || '',
+  smtpPass: process.env.SMTP_PASS || '',
+  mailFrom: process.env.MAIL_FROM || '',
   seedDemo: process.env.SEED_DEMO === '1'
 };
 

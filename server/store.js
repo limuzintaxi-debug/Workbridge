@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { config } from './config.js';
-import { hashPassword } from './security.js';
+import { hashPassword, verifyPassword } from './security.js';
 import { nowIso } from './util.js';
 import { CURRENCY_CATALOG, DEFAULT_CURRENCY } from './currency.js';
 import {
@@ -445,13 +445,45 @@ export async function initStore() {
     console.warn('[workbridge] SEED_DEMO=1 — demo accounts were created.');
   }
 
-  if (!adminExists()) {
-    if (config.adminEmail && config.adminPassword && config.adminPassword.length >= 8) {
-      createAdmin({ email: config.adminEmail, password: config.adminPassword, fullName: 'Administrator' });
-      console.log(`[workbridge] bootstrap admin created for ${config.adminEmail}.`);
+  // The environment administrator is authoritative. When ADMIN_EMAIL and
+  // ADMIN_PASSWORD are set, that account always exists, is active and signs in
+  // with the configured password. This is the supported recovery path when the
+  // original administrator password is lost or the account was suspended.
+  const configuredAdminEmail = (config.adminEmail || '').trim().toLowerCase();
+  const configuredAdminPassword = config.adminPassword || '';
+  if (configuredAdminEmail && configuredAdminPassword.length >= 8) {
+    const existingAdmin = state.users.find(
+      (user) => user.role === 'admin' && user.email === configuredAdminEmail
+    );
+    if (!existingAdmin) {
+      createAdmin({
+        email: configuredAdminEmail,
+        password: configuredAdminPassword,
+        fullName: 'Administrator'
+      });
+      console.log(`[workbridge] bootstrap admin created for ${configuredAdminEmail}.`);
     } else {
-      state.meta.setup_required = true;
+      let repaired = false;
+      if (!verifyPassword(configuredAdminPassword, existingAdmin.password_hash || '')) {
+        existingAdmin.password_hash = hashPassword(configuredAdminPassword);
+        repaired = true;
+      }
+      if (existingAdmin.status !== 'active') {
+        existingAdmin.status = 'active';
+        repaired = true;
+      }
+      if (repaired) {
+        existingAdmin.session_epoch = (existingAdmin.session_epoch || 0) + 1;
+        existingAdmin.repaired_at = nowIso();
+        persist();
+        console.log(
+          `[workbridge] administrator ${configuredAdminEmail} restored from environment credentials.`
+        );
+      }
     }
+    state.meta.setup_required = false;
+  } else if (!adminExists()) {
+    state.meta.setup_required = true;
   }
 
   if (!state.meta.counters) state.meta.counters = { agreement: 1000, invoice: 1000 };
