@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { esc, toast, busy, formObject, pill, money, fmtDate, empty, ageBadge } from '../ui.js';
+import { esc, toast, busy, formObject, pill, money, fmtDate, fmtDateTime, empty, ageBadge } from '../ui.js';
 import { panelShell, options, statCards } from './common.js';
 
 const TABS = [
@@ -52,6 +52,45 @@ async function overview(ctx) {
   return { title: 'Admin overview', html: shell('/admin', 'Admin overview', 'Platform administration', body) };
 }
 
+// Admin can correct any worker or business profile, and issue a reset link.
+function editForm(u, categories) {
+  const p = u.profile || {};
+  const worker = u.role === 'worker';
+  const uid = esc(u.id);
+  const field = (name, label, value, type = 'text', extra = '') => `
+    <div class="field">
+      <label for="${name}-${uid}">${esc(label)}</label>
+      <input id="${name}-${uid}" name="${name}" type="${type}" value="${esc(value ?? '')}" ${extra}>
+    </div>`;
+  const details = worker
+    ? `${field('city', 'City', p.city)}
+       <div class="field"><label for="category-${uid}">Work category</label>
+         <select id="category-${uid}" name="category">${options(categories, p.category || '')}</select></div>
+       ${field('experience_years', 'Experience (years)', p.experience_years ?? 0, 'number', 'min="0" max="60"')}
+       ${field('skills', 'Skills (comma separated)', (p.skills || []).join(', '))}
+       <div class="field"><label for="bio-${uid}">About</label>
+         <textarea id="bio-${uid}" name="bio" maxlength="1000">${esc(p.bio || '')}</textarea></div>
+       <label class="sig-hint" style="display:flex;gap:8px;align-items:center">
+         <input type="checkbox" name="available" ${p.available ? 'checked' : ''}> Available for work</label>`
+    : `${field('company_name', 'Company name', p.company_name)}
+       ${field('country', 'Country', p.country)}
+       ${field('address', 'Address', p.address)}
+       ${field('website', 'Website', p.website)}
+       <div class="field"><label for="about-${uid}">About</label>
+         <textarea id="about-${uid}" name="about" maxlength="1000">${esc(p.about || '')}</textarea></div>`;
+  return `
+    <details class="no-print" style="margin-top:8px">
+      <summary class="sig-hint" style="cursor:pointer">Edit profile details</summary>
+      <form data-edit="${uid}" class="form-grid" style="margin-top:10px">
+        ${field('full_name', worker ? 'Full name' : 'Contact person', u.full_name, 'text', 'required maxlength="120"')}
+        ${field('phone', 'Phone number', u.phone, 'tel', 'required maxlength="40"')}
+        ${field('email', 'Email', u.email, 'email', 'required maxlength="160"')}
+        ${details}
+        <div class="btn-row"><button class="btn btn-navy btn-sm" type="submit">Save changes</button></div>
+      </form>
+    </details>`;
+}
+
 async function users(ctx) {
   const role = ctx.query.get('role') || '';
   const { users: list } = await api.get(`/admin/users${role ? `?role=${encodeURIComponent(role)}` : ''}`);
@@ -83,7 +122,10 @@ async function users(ctx) {
                 ? `<button class="btn btn-danger btn-sm" data-suspend="${esc(u.id)}">Suspend</button>`
                 : `<button class="btn btn-ghost btn-sm" data-activate="${esc(u.id)}">Reactivate</button>`
             }
+            <button class="btn btn-ghost btn-sm" data-reset="${esc(u.id)}">Create reset link</button>
           </div>
+          <p class="sig-hint" data-reset-out="${esc(u.id)}"></p>
+          ${editForm(u, ctx.meta?.categories || [])}
         </article>`
               )
               .join('')}</div>`
@@ -111,6 +153,42 @@ async function users(ctx) {
       }
       for (const button of document.querySelectorAll('[data-activate]')) {
         button.addEventListener('click', () => set(button.dataset.activate, 'active', button));
+      }
+      for (const form of document.querySelectorAll('[data-edit]')) {
+        form.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          const button = form.querySelector('button[type="submit"]');
+          busy(button, true, 'Saving…');
+          const body = formObject(form);
+          if (form.elements.available) body.available = form.elements.available.checked;
+          try {
+            await api.patch(`/admin/users/${form.dataset.edit}`, body);
+            toast('Profile updated', 'success');
+            await ctx.refresh();
+          } catch (error) {
+            toast(error.message, 'error');
+            busy(button, false);
+          }
+        });
+      }
+      for (const button of document.querySelectorAll('[data-reset]')) {
+        button.addEventListener('click', async () => {
+          busy(button, true, 'Creating…');
+          try {
+            const res = await api.post(`/admin/users/${button.dataset.reset}/reset-link`);
+            const out = document.querySelector(`[data-reset-out="${button.dataset.reset}"]`);
+            if (out) {
+              out.innerHTML = `Password reset link for ${esc(res.email)} (expires ${esc(
+                fmtDateTime(res.expires_at)
+              )}):<br><a href="${esc(res.reset_url)}">${esc(res.reset_url)}</a>`;
+            }
+            toast('Reset link created', 'success');
+          } catch (error) {
+            toast(error.message, 'error');
+          } finally {
+            busy(button, false);
+          }
+        });
       }
     }
   };

@@ -883,6 +883,7 @@ router.get('/admin/users', requireRole('admin'), (req, res) => {
   if (role) users = users.filter((u) => u.role === role);
   const rows = users.map((u) => ({
     ...publicUser(u, profileFor(u)),
+    profile: profileFor(u) || null,
     applications: db.applications.filter((a) => a.worker_id === u.id).length,
     jobs: db.jobs.filter((j) => j.business_id === u.id).length
   }));
