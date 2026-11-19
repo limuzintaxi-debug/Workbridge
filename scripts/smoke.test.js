@@ -419,7 +419,6 @@ try {
 
   await step('invoice and agreement lists are scoped per role', async () => {
     const businessInvoices = await business.get('/api/invoices');
-    console.log('DEBUG invoices', businessInvoices.status, String(businessInvoices.text).slice(0, 300));
     assert.ok(businessInvoices.json.invoices.some((i) => i.id === invoiceId));
     const workerAgreements = await worker.get('/api/agreements');
     assert.ok(workerAgreements.json.agreements.some((a) => a.id === agreementId));
