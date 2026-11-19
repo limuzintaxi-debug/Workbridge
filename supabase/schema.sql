@@ -229,9 +229,10 @@ create table if not exists public.payments (
 );
 
 -- Application settings (currency default, registration mode, commission).
+-- Mirrors the adapter contract: one row with id 'global' and the settings in doc.
 create table if not exists public.app_settings (
-  key         text primary key,
-  value       jsonb not null,
+  id          text primary key,
+  doc         jsonb not null,
   updated_at  timestamptz not null default now()
 );
 

@@ -1,113 +1,183 @@
-# Workbridge
-Digital Employment and Business Platform
+# WORKBRIDGE
 
-WORKBRIDGE connects **workers, businesses and support organizations**: find work,
-make agreements, create invoices, and let institutions offer social support — as a
-mobile-first, installable Progressive Web App.
+Digital employment and business platform for workers, businesses and support
+organizations — booking, electronic agreements, institutional & social support,
+and an invoice maker — delivered as a mobile-first, installable Progressive Web
+App.
 
 - Tagline: **Booking • Agreement • Institutional & Social Support • Invoice Maker**
 - **Connecting Workers, Businesses & Support Organizations**
 - **Find Work • Make Agreements • Create Invoices**
+
+Interface languages: **English** and **Arabic** (full RTL layout).
+
+## Stack
+
+| Layer | Choice |
+| --- | --- |
+| Server | Node.js 22+, Express, single process serving API + client on `0.0.0.0:$PORT` |
+| Client | Dependency-free ES modules, hash router, no build step |
+| Auth | httpOnly signed session cookies, scrypt password hashing, role-based access |
+| Data | Supabase (Postgres + Auth + Storage) in production; local JSON store for development |
+| Documents | Server-generated PDF (agreements and invoices), private storage + signed URLs |
 
 ## Quick start
 
 ```bash
 npm install
 npm start          # http://localhost:3000
-npm test           # end-to-end smoke test (23 checks)
+npm test           # end-to-end smoke test (24 checks)
 ```
 
-The app runs immediately with a local demo data store. No credentials required.
-Copy `.env.example` to `.env` to override the port or to prepare Supabase.
+With no credentials the app runs on the local JSON store (`data/db.json`), which is
+the development fallback. Nothing is seeded automatically.
 
-### Demo accounts (dummy data only)
+### First run — create the administrator
 
-| Role | Email | Password |
-| --- | --- | --- |
-| Admin | `admin@workbridge.test` | `Admin#12345` |
-| Worker | `worker@workbridge.test` | `Worker#12345` |
-| Business | `business@workbridge.test` | `Business#12345` |
+1. Open `/#/setup`.
+2. Enter the administrator email, name and a password of at least 10 characters.
+3. This screen closes permanently once an administrator exists.
 
-Admin sign-in lives at `/#/admin/signin` and is linked only from the footer.
-There is no public admin registration.
+Admin sign-in is `/#/admin/signin`. There is **no public admin registration**: the
+API rejects `role: "admin"` on `/api/auth/register` with `403 role_not_allowed`.
+
+Workers and businesses register themselves from the public home page panels.
 
 ## What is implemented
 
-**Public home (`/`)** — WORKBRIDGE logo and name, the exact tagline and subtitle
-lines, two panels (WORKER / BUSINESS, each with Sign Up and Sign In), the
-red-and-white network globe with the black-and-white handshake, approved support
-organizations, and a Help & Support section using **Limuzin@196vip.si** only.
+### Public site
+- WORKBRIDGE logo and name, approved tagline and subtitle lines.
+- Two panels: **WORKER** and **BUSINESS**, each with Sign Up and Sign In.
+- Red-and-white network globe with the black-and-white handshake (approved
+  Design No. 2), circular WR app icon.
+- Approved support organizations only (name and type; never address or contact).
+- Help & Support: **Limuzin@196vip.si** only — no phone support, no live chat.
+- Institution registration form, routed to the admin queue as `pending`.
+- Language switcher (EN / AR) in the top bar.
 
-**Worker panel** — registration with name, phone, Aqama number and skill category
-(Driver, Laborer, Electrician, Plumber and more); browse work listings; view details
-and apply; notifications for relevant new listings; applications; agreements and
-invoices with print/PDF output; profile editing.
+### Worker panel
+- Registration with name, phone, Aqama number (stored masked only) and skill
+  category (Driver, Laborer, Electrician, Plumber, …).
+- Available listings with age status: **New**, **24 Hours Old**, **48 Hours Old**,
+  **Older**. Listings are never auto-deleted; they stay until the owner closes them
+  or an admin removes them.
+- Job details, apply, application management, notifications for new listings.
+- Agreements and invoices with PDF download and print.
+- Profile management, account page, password change.
 
-**Business panel** — registration and profile; post, edit and close work
-opportunities; search workers by name, category and city; review and accept or
-reject applications; create agreements and invoices with print/PDF output.
+### Business panel
+- Registration and business profile.
+- Post listings, close listings, review applications, select workers.
+- Worker search across registered workers.
+- Create agreements, issue invoices, PDF download and print.
 
-**Listings** are labelled **New**, **24 Hours Old**, **48 Hours Old** or **Older** and
-are **never deleted automatically** — only the owner closes them or an admin removes them.
+### Agreements
+- Company/contractor and worker details, work description and terms.
+- Unique agreement reference (`WB-AG-…`), date and time.
+- **Two-party electronic signing**: both the business and the worker sign on their
+  own touchscreen; the server rejects a missing or empty signature image.
+- Downloadable PDF, printable, status tracking (`pending` → `signed`).
 
-**Agreements** — company and worker details, work description and terms, unique
-reference (`WB-AGR-YYYYMMDD-NNNN`), date and time, touchscreen signature pads for
-both parties, and a print-ready document.
+### Invoice maker
+- Automatic serial number (`WB-INV-…`).
+- Company name, phone, address and country; service description.
+- Price, VAT rate and total computed **on the server**; optional signature and stamp.
+- PDF download and print.
 
-**Invoice maker** — automatic serial (`WB-INV-YYYYMM-NNNN`), company name, phone,
-address and country, service lines, price, VAT rate, server-computed totals,
-optional signature and company stamp, print/PDF output.
+### Multi-currency
+- SAR, USD, EUR, AED, GBP, PKR, INR, BDT, PHP, EGP and more (30 in the catalog).
+- Admin selects the platform default and which currencies are enabled.
+- The default propagates to agreements, invoices, listings and every money display;
+  currency is never hardcoded in the interface.
 
-**Institutional & social support** — public institution registration that always
-enters the Admin Panel as *pending*; only approved **names and types** appear in the
-worker and business panels. Addresses and contact details are never shown publicly.
+### Admin panel
+- Separate protected login, no public registration.
+- Overview, worker and business management, account suspension.
+- Institution review: approve or reject; only approved names become public.
+- Listing moderation, reported content, agreements and invoices.
+- Platform settings: default/enabled currencies, registration mode
+  (`auto` or `review`) per role, commission settings **off by default** with 1% or
+  2% rates and payer selection. No commission is collected.
 
-**Admin panel** — separate protected login; overview counters; manage and suspend
-workers and businesses; approve or reject institutions; moderate listings (close,
-remove) and reported content; review agreements and invoices; commission settings
-**off by default** with 1% or 2% rates and a payer selection. Nothing is charged.
+## Configuration
 
-**PWA** — manifest, maskable icons, service worker, installable from a browser link
-on Android. No live location tracking.
+Copy `.env.example` to `.env` (or set these in the hosting dashboard):
 
-## Project structure
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `PORT` | platform | Port to listen on (hosting provides it) |
+| `SESSION_SECRET` | production | Signs session cookies (32+ random characters) |
+| `SUPABASE_URL` | production | Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | production | Server-side Postgres/Storage access — never expose |
+| `SUPABASE_ANON_KEY` | optional | Enables Supabase Auth for sign-up/recovery |
+| `APP_URL` | production | Public base URL used in recovery links |
+| `SETUP_TOKEN` | recommended | Required once for `POST /api/setup/admin` |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | optional | Non-interactive admin bootstrap |
+| `DATA_DIR` | optional | Local cache directory (default `./data`) |
+| `SEED_DEMO` | optional | `1` seeds throwaway demo rows for development only |
 
-```
-server/            Express API (single origin, serves the PWA too)
-  config.js        Environment and runtime configuration
-  security.js      scrypt hashing, HMAC-signed session cookies
-  middleware.js    Session resolution and profile lookup
-  routes.js        All REST endpoints, validation and authorization
-  store.js         Data layer (local JSON now, Supabase migration point)
-  util.js          Age buckets, Aqama masking, money rounding, categories
-public/            Client: hash router, views, styles, PWA assets
-  views/           public, worker, business, admin, docs (agreement/invoice)
-supabase/          schema.sql — tables, triggers, RLS policies
-scripts/           smoke.test.js — end-to-end API test
-docs/              REFACTOR_PROPOSAL.md, DATABASE.md
-```
+Secrets are read from the environment only. No key is ever written to source or sent
+to the browser.
 
-## Architecture in one paragraph
+## Supabase (production database)
 
-One Node/Express server serves both the JSON API and the static PWA on the same
-origin, so the session cookie is `httpOnly` + `SameSite=Lax` and no token ever
-reaches JavaScript. The browser never holds a Supabase key. All authorization is
-enforced in `server/routes.js` by role; `supabase/schema.sql` adds RLS as an
-independent second layer once Supabase is connected. The data layer is isolated in
-`server/store.js`, so moving from the demo store to Supabase touches one module.
+Full instructions: [`docs/DATABASE.md`](docs/DATABASE.md).
 
-## Documentation
+1. Create a Supabase project.
+2. Run [`supabase/schema.sql`](supabase/schema.sql) in the SQL Editor — tables,
+   indexes, triggers, RLS policies for every table, the public institution view and
+   the two private storage buckets.
+3. Set `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (and `SUPABASE_ANON_KEY` for
+   Supabase Auth), then restart.
 
-- `docs/REFACTOR_PROPOSAL.md` — inspection report, planned architecture, acceptance
-  criteria and tradeoffs.
-- `docs/DATABASE.md` — Supabase setup, RLS summary and the migration path.
+The server checks the schema on boot and reports
+`supabase_schema_missing` with the exact tables to create if the SQL was not run.
 
-## Prototype limits (deliberate)
+## Tests
 
-- Supabase is **not connected** yet: the app runs on the local demo store until
-  `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are configured
-  and `server/store.js` is pointed at Postgres.
-- PDF output uses the browser's print-to-PDF dialog rather than a PDF library, so no
-  extra dependency is needed and every phone can save or print the document.
-- Test/demo data only. Do not enter real Aqama numbers or signatures.
-- Nothing is deployed and no custom domain is configured, as requested.
+`npm test` boots the real server on a throwaway data directory and exercises 24
+checks: setup, registration, role rules, masked Aqama, listing lifecycle and age
+buckets, applications, agreements with two signatures, invoice VAT totals,
+institution approval and public visibility, admin moderation, commission settings,
+session suspension, per-role document scoping and PWA assets.
+
+## Deployment
+
+The repository includes a `Dockerfile` that installs production dependencies and
+starts the server on the platform port. The server binds `0.0.0.0` and reads
+`PORT`, so it works behind the platform proxy without extra configuration.
+
+Health check: `GET /api/health`.
+
+### Custom domain
+
+Connecting a custom domain requires a paid AppJet plan (Starter or Pro, Settings →
+Billing). On the Free plan the app is served on its AppJet URL only.
+
+### Durable data
+
+The Free hosting plan has no persistent disk, so `data/db.json` is cleared when a
+new release is rolled out. For durable production data configure Supabase (above):
+the server then mirrors every collection into Postgres and only keeps the JSON file
+as a fast local cache.
+
+## Security notes
+
+- Passwords: scrypt with per-user salt; never logged or returned.
+- Sessions: signed, httpOnly, SameSite=Lax cookies with expiry and server-side
+  revocation when an account is suspended.
+- Aqama numbers: stored masked (`••••1234`) only — full numbers are never persisted.
+- Authorization is enforced per route by role, and documents are scoped to the two
+  parties involved (admins excepted).
+- Supabase RLS is enabled on every table; the service-role key stays server-side.
+- Institutional contact details are never returned by any public endpoint.
+- Rate limiting protects authentication and write endpoints.
+
+## Limitations
+
+- No live location tracking (by design).
+- Prototype policy: do not enter real Aqama numbers or real signatures; the UI and
+  docs state this.
+- Email delivery for password recovery depends on Supabase Auth (or the configured
+  SMTP provider); without it, recovery links are surfaced only to the server log in
+  development.
