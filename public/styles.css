@@ -304,3 +304,20 @@ html[dir="rtl"] .doc-table .num { text-align: left; }
 html[dir="rtl"] .hero-panels,
 html[dir="rtl"] .stats,
 html[dir="rtl"] .split { direction: rtl; }
+
+/* ---------- commission strip + one-line invoice history ---------- */
+.commission-bar { display: flex; flex-wrap: wrap; gap: 2px 12px; align-items: baseline; justify-content: space-between; background: #0b2340; color: #fff; padding: 8px 16px; font-size: 0.76rem; letter-spacing: 0.02em; }
+.commission-bar strong { color: #f08a24; font-size: 0.86rem; }
+.commission-bar .muted { color: rgba(255, 255, 255, 0.72); }
+.inv-list { border: 1px solid var(--line, #e5e7eb); border-radius: 10px; overflow: hidden; }
+.inv-head, .inv-row { display: grid; grid-template-columns: 1.25fr 0.8fr 0.9fr 1fr; gap: 6px; align-items: center; padding: 9px 10px; font-size: 0.78rem; white-space: nowrap; }
+.inv-head { background: #f8fafc; color: var(--muted, #6b7280); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.66rem; }
+.inv-row { color: inherit; text-decoration: none; border-top: 1px solid var(--line, #e5e7eb); }
+.inv-row:hover, .inv-row:focus-visible { background: #fff7ed; }
+.inv-row > span { overflow: hidden; text-overflow: ellipsis; }
+.inv-serial { font-weight: 600; }
+.inv-total, .inv-commission { text-align: right; }
+.inv-commission { color: #b45309; font-weight: 600; }
+@media (max-width: 480px) {
+  .inv-head, .inv-row { grid-template-columns: 1.15fr 0.72fr 0.85fr 1fr; font-size: 0.67rem; padding: 8px 6px; gap: 4px; }
+}
