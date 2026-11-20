@@ -72,7 +72,7 @@ function topbarHtml(path) {
 }
 
 function footerHtml() {
-  return `<div>WORKBRIDGE — ${esc(t('brand.tagline'))}</div>
+  return `<div><img class="footer-logo" src="/assets/logo.png" alt="WORKBRIDGE" width="66" height="44" /> WORKBRIDGE — ${esc(t('brand.tagline'))}</div>
     <div style="margin-top:6px">Help &amp; Support: <a href="mailto:Limuzin@196vip.si">Limuzin@196vip.si</a> · <a href="#/institutions">${esc(
       t('home.institutionTitle')
     )}</a></div>

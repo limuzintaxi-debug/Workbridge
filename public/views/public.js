@@ -226,6 +226,7 @@ export async function authView(ctx) {
 
   const html = `<div class="container" style="max-width:640px">
     <div class="card">
+      <img class="auth-logo" src="/assets/logo.png" alt="WORKBRIDGE logo" width="180" height="120" />
       <h1>${esc(title)}</h1>
       ${
         role === 'admin'
