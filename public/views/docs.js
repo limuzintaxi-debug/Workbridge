@@ -23,33 +23,76 @@ function currencyOptions(ctx, selected) {
     .join('');
 }
 
+function saveBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+async function fetchPdfBlob(path, filename) {
+  const res = await fetch(`/api${path}`, { credentials: 'same-origin' });
+  if (!res.ok) {
+    let message = `Could not generate PDF (${res.status})`;
+    try {
+      const data = await res.json();
+      if (data && data.message) message = data.message;
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new Error(message);
+  }
+  const blob = await res.blob();
+  return { blob, file: new File([blob], filename, { type: 'application/pdf' }) };
+}
+
 async function downloadPdf(path, filename) {
   try {
-    const res = await fetch(`/api${path}`, { credentials: 'same-origin' });
-    if (!res.ok) {
-      let message = `Could not generate PDF (${res.status})`;
-      try {
-        const data = await res.json();
-        if (data && data.message) message = data.message;
-      } catch {
-        /* non-JSON error body */
-      }
-      toast(message, 'error');
-      return;
-    }
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    const { blob } = await fetchPdfBlob(path, filename);
+    saveBlob(blob, filename);
     toast('PDF downloaded', 'success');
   } catch (error) {
     toast(error.message, 'error');
   }
+}
+
+/**
+ * Share the generated PDF through the device share sheet, which is how Android
+ * and iOS offer WhatsApp, email and "Save to Files". Browsers without file
+ * sharing fall back to saving the PDF and sharing a text summary.
+ */
+async function sharePdf(path, filename, text) {
+  try {
+    const { blob, file } = await fetchPdfBlob(path, filename);
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: filename, text });
+        return;
+      } catch (error) {
+        if (error && error.name === 'AbortError') return;
+      }
+    }
+    saveBlob(blob, filename);
+    if (navigator.share) {
+      await navigator.share({ title: filename, text }).catch(() => {});
+    } else {
+      toast('PDF saved to your device', 'success');
+    }
+  } catch (error) {
+    toast(error.message, 'error');
+  }
+}
+
+function shareByEmail(subject, body) {
+  window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+function shareByWhatsApp(body) {
+  window.open(`https://wa.me/?text=${encodeURIComponent(body)}`, '_blank', 'noopener');
 }
 
 function partiesBlock(agreement) {
@@ -291,7 +334,10 @@ export async function invoiceView(ctx) {
     <div class="doc-toolbar no-print">
       <a class="btn btn-ghost btn-sm" href="#${ctx.user.role === 'admin' ? '/admin/documents' : `/${ctx.user.role}/invoices`}">Back</a>
       <button class="btn btn-primary btn-sm" data-pdf>Download PDF</button>
-      <button class="btn btn-navy btn-sm" data-print>Print</button>
+      <button class="btn btn-navy btn-sm" data-share>Share PDF</button>
+      <button class="btn btn-ghost btn-sm" data-whatsapp>WhatsApp</button>
+      <button class="btn btn-ghost btn-sm" data-email>Email</button>
+      <button class="btn btn-ghost btn-sm" data-print>Print</button>
     </div>
     <article class="doc" id="print-area">
       <header class="doc-head">
@@ -357,10 +403,34 @@ export async function invoiceView(ctx) {
     mount() {
       const printButton = document.querySelector('[data-print]');
       if (printButton) printButton.addEventListener('click', () => window.print());
+      const filename = `invoice-${invoice.serial}.pdf`;
+      const summary = `WORKBRIDGE invoice ${invoice.serial} from ${invoice.issuer_name} — total ${invoice.total} ${invoice.currency}.`;
+      const link = `${location.origin}/#/invoices/${invoice.id}`;
+
       const pdfButton = document.querySelector('[data-pdf]');
       if (pdfButton) {
-        pdfButton.addEventListener('click', () =>
-          downloadPdf(`/invoices/${id}/pdf`, `invoice-${invoice.serial}.pdf`)
+        pdfButton.addEventListener('click', () => downloadPdf(`/invoices/${id}/pdf`, filename));
+      }
+
+      const shareButton = document.querySelector('[data-share]');
+      if (shareButton) {
+        shareButton.addEventListener('click', () =>
+          sharePdf(`/invoices/${id}/pdf`, filename, `${summary} ${link}`)
+        );
+      }
+
+      const whatsappButton = document.querySelector('[data-whatsapp]');
+      if (whatsappButton) {
+        whatsappButton.addEventListener('click', () => shareByWhatsApp(`${summary} ${link}`));
+      }
+
+      const emailButton = document.querySelector('[data-email]');
+      if (emailButton) {
+        emailButton.addEventListener('click', () =>
+          shareByEmail(
+            `WORKBRIDGE invoice ${invoice.serial}`,
+            `${summary}\n\n${link}\n\nOpen the link to download or print the PDF.`
+          )
         );
       }
     }
@@ -373,7 +443,7 @@ async function newInvoice(ctx) {
     <form id="invoice-form">
       <h3>Company details</h3>
       <div class="form-row two">
-        <div class="field"><label for="issuer_name">Company name</label><input id="issuer_name" name="issuer_name" required value="${esc(profile.company_name || ctx.user.full_name)}" maxlength="160" /></div>
+        <div class="field"><label for="issuer_name">Company name</label><input id="issuer_name" name="issuer_name" value="${esc(profile.company_name || ctx.user.full_name)}" maxlength="160" /></div>
         <div class="field"><label for="issuer_phone">Phone</label><input id="issuer_phone" name="issuer_phone" value="${esc(profile.phone || ctx.user.phone || '')}" maxlength="40" /></div>
       </div>
       <div class="form-row two">
