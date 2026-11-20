@@ -400,6 +400,15 @@ try {
     assert.equal(invoice.json.invoice.commission_rate, undefined);
     assert.equal(invoice.json.invoice.commission_amount, undefined);
 
+    const adminHistory = await admin.get('/api/admin/invoices');
+    const adminRow = adminHistory.json.invoices.find(
+      (row) => row.serial === invoice.json.invoice.serial
+    );
+    assert.ok(adminRow, 'the invoice appears in the administrator history');
+    assert.equal(adminRow.commission.rate, 2.5, 'history row carries the applied rate');
+    assert.equal(adminRow.commission.amount, 10, 'history row carries the commission amount');
+    assert.equal(adminRow.commission.currency, 'AED');
+
     const agreement = await business.post('/api/agreements', {
       worker_id: workerId,
       scope: 'Commission test scope.',
