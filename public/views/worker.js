@@ -63,7 +63,7 @@ async function overview(ctx) {
             <dt>Category</dt><dd>${esc(profile.category || '—')}</dd>
             <dt>City</dt><dd>${esc(profile.city || '—')}</dd>
             <dt>Aqama</dt><dd>${esc(profile.aqama_masked || '—')}</dd>
-            <dt>Platform commission</dt><dd>${commission.enabled ? `${commission.rate}% (paid by ${esc(commission.payer)})` : 'Not applicable'}</dd>
+            <dt>Platform commission</dt><dd>${Number(commission.rate) > 0 ? `${commission.rate}% (paid by ${esc(commission.payer)})` : '0% — no commission charged'}</dd>
             <dt>Available</dt><dd>${profile.available ? 'Yes' : 'No'}</dd>
           </dl>
           <a class="btn btn-ghost btn-sm" href="#/worker/profile">Edit profile</a>

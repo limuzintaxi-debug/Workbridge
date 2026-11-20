@@ -44,8 +44,8 @@ async function overview(ctx) {
       </div>
       <div class="card">
         <h3>Commission</h3>
-        <p class="muted">${commission && commission.enabled ? `Enabled at ${commission.rate}% — paid by ${esc(commission.payer)}.` : 'Off — no commission is recorded.'}</p>
-        <p class="sig-hint">${commissionSummary && commissionSummary.count ? `${commissionSummary.count} recorded document${commissionSummary.count === 1 ? '' : 's'} in the commission record.` : 'No commission recorded yet.'} Applied to every new agreement and invoice, and never shown on an invoice.</p>
+        <p class="muted">${commission && Number(commission.rate) > 0 ? `Active at ${commission.rate}% — paid by ${esc(commission.payer)}.` : '0% — no commission is charged.'}</p>
+        <p class="sig-hint">${commissionSummary && commissionSummary.count ? `${commissionSummary.count} recorded document${commissionSummary.count === 1 ? '' : 's'} in the commission record.` : 'No commission recorded yet.'} Applied to every new agreement and invoice; shown only in the invoice history.</p>
         <a class="btn btn-ghost btn-sm" href="#/admin/commission">Open commission dashboard</a>
       </div>
     </div>`;
@@ -466,7 +466,7 @@ async function settings(ctx) {
 
   const commissionCard = `<div class="card">
     <h2>Commission</h2>
-    <p class="muted">Current: <strong>${commission && commission.enabled ? `${commission.rate}% (${esc(commission.payer)} pays)` : 'OFF'}</strong></p>
+    <p class="muted">Current: <strong>${commission ? `${commission.rate}%` : '0%'}</strong>${commission && Number(commission.rate) > 0 ? ` (${esc(commission.payer)} pays)` : ' — no commission charged'}</p>
     <p class="sig-hint">The percentage is changed on the Commission page. It applies to every new agreement and invoice and is recorded for the administrator only.</p>
     <a class="btn btn-ghost btn-sm" href="#/admin/commission">Open commission dashboard</a>
   </div>`;
@@ -593,10 +593,10 @@ async function commissionView(ctx) {
         busy(button, true, 'Saving…');
         try {
           const res = await api.put('/admin/settings/commission', {
-            enabled: form.elements.enabled.checked,
             rate: Number(form.elements.rate.value),
             payer: form.elements.payer.value
           });
+          if (ctx.setCommission && res.commission) ctx.setCommission(res.commission);
           toast('Commission percentage saved', 'success');
           await ctx.refresh();
           return res;

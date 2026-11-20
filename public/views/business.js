@@ -67,7 +67,7 @@ async function overview(ctx) {
             <dt>Company</dt><dd>${esc((ctx.user.profile || {}).company_name || '—')}</dd>
             <dt>Contact</dt><dd>${esc((ctx.user.profile || {}).contact_name || ctx.user.full_name)}</dd>
             <dt>Country</dt><dd>${esc((ctx.user.profile || {}).country || '—')}</dd>
-            <dt>Platform commission</dt><dd>${commission.enabled ? `${commission.rate}% (paid by ${esc(commission.payer)})` : 'Not applicable'}</dd>
+            <dt>Platform commission</dt><dd>${Number(commission.rate) > 0 ? `${commission.rate}% (paid by ${esc(commission.payer)})` : '0% — no commission charged'}</dd>
           </dl>
           <a class="btn btn-ghost btn-sm" href="#/business/profile">Edit profile</a>
         </div>
