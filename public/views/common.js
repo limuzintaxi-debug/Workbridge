@@ -8,6 +8,28 @@ export function options(list, selected) {
     .join('');
 }
 
+export function invoiceRow(inv) {
+  const entry = inv.commission;
+  const rate = entry ? Number(entry.rate) || 0 : 0;
+  const commissionText = rate > 0
+    ? `${money(Number(entry.amount) || 0, entry.currency || inv.currency)} · ${rate}%`
+    : '0%';
+  return `<a class="inv-row" href="#/invoices/${esc(inv.id)}">
+      <span class="inv-serial">${esc(inv.serial)}</span>
+      <span>${esc(fmtDate(inv.created_at))}</span>
+      <span class="inv-total">${money(inv.total, inv.currency)}</span>
+      <span class="inv-commission">${esc(commissionText)}</span>
+    </a>`;
+}
+
+/** Invoice history: one line per invoice with serial, date, bill amount and commission. */
+export function invoiceList(list) {
+  return `<div class="inv-list">
+    <div class="inv-head"><span>Invoice</span><span>Date</span><span>Bill amount</span><span>Commission</span></div>
+    ${list.map(invoiceRow).join('')}
+  </div>`;
+}
+
 export function tabsBar(tabs, path) {
   const here = `#${path}`;
   return `<nav class="subnav no-print">${tabs

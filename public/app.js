@@ -79,6 +79,22 @@ function footerHtml() {
     <div class="muted" style="margin-top:6px;font-size:0.75rem">© ${new Date().getFullYear()} WORKBRIDGE</div>`;
 }
 
+function commissionBanner() {
+  if (!state.user) return '';
+  const setting = (state.meta && state.meta.commission) || { rate: 0, payer: 'business' };
+  const rate = Number(setting.rate) || 0;
+  const payer =
+    setting.payer === 'worker'
+      ? 'worker pays'
+      : setting.payer === 'both'
+        ? 'worker & business pay'
+        : 'business pays';
+  return `<div class="commission-bar" id="commission-bar" data-rate="${rate}">
+    <span>${esc(t('commission.current'))}: <strong>${rate}%</strong></span>
+    <span class="muted">${rate > 0 ? esc(payer) : esc(t('commission.off'))}</span>
+  </div>`;
+}
+
 function ctxFor(parts, query) {
   return {
     user: state.user,
@@ -88,6 +104,9 @@ function ctxFor(parts, query) {
     refresh: render,
     setUser: (user) => {
       state.user = user || null;
+    },
+    setCommission: (commission) => {
+      if (state.meta && commission) state.meta.commission = commission;
     }
   };
 }
@@ -203,7 +222,7 @@ async function render() {
     }
 
     const container = document.getElementById('view');
-    container.innerHTML = view.html || '';
+    container.innerHTML = `${commissionBanner()}${view.html || ''}`;
     document.getElementById('topbar').innerHTML = topbarHtml(path);
     bindLangSwitcher(document.getElementById('topbar'), () => render());
     document.getElementById('footer').innerHTML = footerHtml();
