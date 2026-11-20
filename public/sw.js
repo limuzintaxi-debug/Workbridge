@@ -16,6 +16,9 @@ const SHELL = [
   '/assets/logo.svg',
   '/assets/icon.svg',
   '/assets/icon-192.png',
+  '/assets/icon-maskable-512.png',
+  '/assets/apple-touch-icon.png',
+  '/assets/icon-192.png',
   '/assets/icon-512.png',
   '/manifest.webmanifest'
 ];
