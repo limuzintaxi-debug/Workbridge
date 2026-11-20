@@ -154,7 +154,7 @@ export async function agreementView(ctx) {
     </div>
     <article class="doc" id="print-area">
       <header class="doc-head">
-        <img src="/assets/logo.svg" alt="WORKBRIDGE" class="doc-logo" />
+        <img src="/assets/logo.png" alt="WORKBRIDGE" class="doc-logo" />
         <div class="doc-head-right">
           <div class="doc-title">WORK AGREEMENT</div>
           <div class="doc-ref">Ref: ${esc(agreement.ref)}</div>
@@ -340,7 +340,7 @@ export async function invoiceView(ctx) {
     </div>
     <article class="doc" id="print-area">
       <header class="doc-head">
-        <img src="/assets/logo.svg" alt="WORKBRIDGE" class="doc-logo" />
+        <img src="/assets/logo.png" alt="WORKBRIDGE" class="doc-logo" />
         <div class="doc-head-right">
           <div class="doc-title">INVOICE</div>
           <div class="doc-ref">No: ${esc(invoice.serial)}</div>

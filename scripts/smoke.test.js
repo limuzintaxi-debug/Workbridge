@@ -496,8 +496,10 @@ try {
     assert.ok(json.icons.length >= 2);
     const sw = await fetch(`${BASE}/sw.js`);
     assert.equal(sw.status, 200);
-    const logo = await fetch(`${BASE}/assets/logo.svg`);
+    const logo = await fetch(`${BASE}/assets/logo.png`);
     assert.equal(logo.status, 200);
+    assert.equal(logo.headers.get('content-type'), 'image/png');
+    assert.ok(json.icons.some((icon) => icon.src === '/assets/logo.png'));
   });
 } catch (error) {
   console.error(`\nFatal: ${error.message}`);

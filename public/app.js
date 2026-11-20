@@ -55,7 +55,7 @@ function topbarHtml(path) {
   const role = state.user ? state.user.role : null;
   const links = role ? NAV[role] || [] : PUBLIC_NAV;
   const active = (href) => (`#${path}` === href || (`#${path}`).startsWith(`${href}/`) ? 'active' : '');
-  return `<a class="brand" href="#/"><img src="/assets/logo.svg" alt="" /><span class="brand-name">WORK<span>BRIDGE</span></span></a>
+  return `<a class="brand" href="#/"><img src="/assets/logo.png" alt="" width="51" height="34" /><span class="brand-name">WORK<span>BRIDGE</span></span></a>
     <nav>
       ${links
         .map(([href, key]) => `<a href="${href}" class="${active(href)}">${esc(t(key))}</a>`)

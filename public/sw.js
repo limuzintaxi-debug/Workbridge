@@ -1,5 +1,5 @@
 /* WORKBRIDGE service worker — app shell caching only. API calls always go to the network. */
-const CACHE = 'workbridge-v4';
+const CACHE = 'workbridge-v5';
 const SHELL = [
   '/',
   '/index.html',
@@ -13,13 +13,7 @@ const SHELL = [
   '/views/business.js',
   '/views/admin.js',
   '/views/docs.js',
-  '/assets/logo.svg',
-  '/assets/icon.svg',
-  '/assets/icon-192.png',
-  '/assets/icon-maskable-512.png',
-  '/assets/apple-touch-icon.png',
-  '/assets/icon-192.png',
-  '/assets/icon-512.png',
+  '/assets/logo.png',
   '/manifest.webmanifest'
 ];
 
