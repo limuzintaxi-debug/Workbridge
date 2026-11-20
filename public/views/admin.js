@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { esc, toast, busy, formObject, pill, money, fmtDate, fmtDateTime, empty, ageBadge } from '../ui.js';
-import { panelShell, options, statCards } from './common.js';
+import { panelShell, options, statCards, invoiceList } from './common.js';
 
 const TABS = [
   ['#/admin', 'Overview'],
@@ -338,17 +338,7 @@ async function documents(ctx) {
       <h2>Invoices (${invoices.length})</h2>
       ${
         invoices.length
-          ? `<div class="list-stack">${invoices
-              .map(
-                (i) => `<article class="card card-tight">
-          <div class="section-head" style="margin-bottom:6px">
-            <div><strong>${esc(i.serial)}</strong><div class="job-meta"><span>${esc(i.issuer_name)}</span><span>${esc(i.client_name)}</span><span>${esc(fmtDate(i.created_at))}</span></div></div>
-            <div class="job-pay">${money(i.total, i.currency)}</div>
-          </div>
-          <a class="btn btn-navy btn-sm" href="#/invoices/${esc(i.id)}">Open</a>
-        </article>`
-              )
-              .join('')}</div>`
+          ? invoiceList(invoices)
           : empty('No invoices yet.')
       }
     </div>`;
@@ -576,11 +566,11 @@ async function commissionView(ctx) {
             <select id="payer" name="payer">${options(['business', 'worker', 'both'], commission.payer)}</select>
           </div>
         </div>
-        <div class="field"><label><input type="checkbox" name="enabled" ${commission.enabled ? 'checked' : ''} style="width:auto;min-height:0;margin-right:8px" />Commission enabled (0% switches it off)</label></div>
+        <p class="sig-hint">Enter 0% to charge no commission. The percentage applies to every new agreement and invoice, and is shown in the invoice history.</p>
         <button class="btn btn-navy" type="submit">Save commission percentage</button>
       </form>
       <div class="notice" id="commission-state" style="margin-top:12px">
-        Current: ${commission.enabled ? `${commission.rate}% paid by ${esc(commission.payer)}` : 'OFF — no commission recorded'}
+        Current: <strong>${commission.rate}%</strong>${Number(commission.rate) > 0 ? ` paid by ${esc(commission.payer)}` : ' — no commission charged'}
       </div>
     </div>
     <div class="card">

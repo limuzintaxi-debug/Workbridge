@@ -819,7 +819,7 @@ router.get('/invoices', requireRole('worker', 'business', 'admin'), (req, res) =
   let list = db.invoices;
   if (req.user.role !== 'admin') list = list.filter((i) => i.issuer_id === req.user.id);
   list = [...list].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  res.json({ invoices: list.map(invoiceView) });
+  res.json({ invoices: list.map(invoiceListRow) });
 });
 
 router.get('/invoices/:id', requireRole('worker', 'business', 'admin'), (req, res) => {
@@ -1064,9 +1064,30 @@ router.get('/admin/agreements', requireRole('admin'), (req, res) => {
   res.json({ agreements: list.map((a) => agreementView(a, req.user)) });
 });
 
+/**
+ * Commission recorded for one invoice. Exposed only through history lists: the
+ * invoice document itself never carries commission fields.
+ */
+function invoiceCommission(invoice) {
+  const entry = (data().commissions || []).find(
+    (row) => row.doc_type === 'invoice' && row.doc_id === invoice.id
+  );
+  if (!entry) return null;
+  return {
+    rate: entry.rate,
+    amount: entry.commission_amount,
+    currency: entry.currency || invoice.currency,
+    payer: entry.payer || 'business'
+  };
+}
+
+function invoiceListRow(invoice) {
+  return { ...invoiceView(invoice), commission: invoiceCommission(invoice) };
+}
+
 router.get('/admin/invoices', requireRole('admin'), (req, res) => {
   const list = [...data().invoices].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  res.json({ invoices: list.map(invoiceView) });
+  res.json({ invoices: list.map(invoiceListRow) });
 });
 
 router.get('/admin/reports', requireRole('admin'), (req, res) => {
