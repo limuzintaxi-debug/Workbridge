@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { esc, toast, busy, formObject, pill, money, fmtDate, empty, ageBadge } from '../ui.js';
-import { panelShell, jobCard, options, statCards } from './common.js';
+import { panelShell, jobCard, options, statCards, invoiceList } from './common.js';
 
 const TABS = [
   ['#/business', 'Dashboard'],
@@ -397,19 +397,7 @@ async function invoices(ctx) {
     <div class="btn-row" style="margin-bottom:12px"><a class="btn btn-primary" href="#/invoices/new">Create invoice</a></div>
     ${
       list.length
-        ? `<div class="list-stack">${list
-            .map(
-              (i) => `<article class="job-card">
-          <header>
-            <div><h3>${esc(i.serial)}</h3>
-              <div class="job-meta"><span>${esc(i.client_name)}</span><span>${esc(fmtDate(i.created_at))}</span></div>
-            </div>
-            <div class="job-pay">${money(i.total, i.currency)}</div>
-          </header>
-          <div class="btn-row"><a class="btn btn-navy btn-sm" href="#/invoices/${esc(i.id)}">Open invoice</a></div>
-        </article>`
-            )
-            .join('')}</div>`
+        ? invoiceList(list)
         : empty('No invoices yet.')
     }`;
 

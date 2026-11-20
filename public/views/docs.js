@@ -177,7 +177,6 @@ export async function agreementView(ctx) {
           <tbody>
             ${agreement.job ? `<tr><th>Listing</th><td>${esc(agreement.job.title)}</td></tr>` : ''}
             <tr><th>Pay</th><td>${money(agreement.pay_amount, agreement.currency)} per ${esc(agreement.pay_period)}</td></tr>
-            ${agreement.commission_rate ? `<tr><th>Platform commission</th><td>${agreement.commission_rate}%${agreement.commission_amount ? ` — ${money(agreement.commission_amount, agreement.currency)}` : ''} paid by ${esc(agreement.commission_payer || 'business')}</td></tr>` : ''}
             ${agreement.start_date ? `<tr><th>Start date</th><td>${esc(fmtDate(agreement.start_date))}</td></tr>` : ''}
             ${agreement.end_date ? `<tr><th>End date</th><td>${esc(fmtDate(agreement.end_date))}</td></tr>` : ''}
           </tbody>
