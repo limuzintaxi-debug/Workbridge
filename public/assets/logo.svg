@@ -1,16 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="WORKBRIDGE logo: letter W containing two joined hands">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1536 1024" width="1536" height="1024" role="img" aria-label="WORKBRIDGE logo: letter W containing two joined hands">
   <title>WORKBRIDGE</title>
-  <!-- Letter W -->
-  <path d="M96 168 L180 396 L256 262 L332 396 L416 168" fill="none" stroke="#0B2340" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- Two joined hands (handshake) inside the W -->
-  <g fill="#F08A24">
-    <rect x="150" y="212" width="80" height="26" rx="13" transform="rotate(-10 190 225)"/>
-    <rect x="282" y="212" width="80" height="26" rx="13" transform="rotate(10 322 225)"/>
-    <rect x="204" y="184" width="76" height="28" rx="14" transform="rotate(-10 242 198)"/>
-    <rect x="232" y="220" width="76" height="28" rx="14" transform="rotate(-10 270 234)"/>
-  </g>
-  <g stroke="#FFFFFF" stroke-width="4" stroke-linecap="round">
-    <path d="M243 189 l6 21"/>
-    <path d="M261 187 l6 21"/>
-  </g>
+  <!--
+    The approved WORKBRIDGE artwork is supplied as a raster image.
+    It lives in this folder as logo.png and is used directly by the app
+    (header, footer, sign-in and registration, dashboards, admin panel,
+    documents, favicon and PWA manifest) so that the displayed mark is
+    always the exact supplied pixels. This SVG only references that file;
+    it never redraws, traces or re-colours the mark.
+  -->
+  <image href="logo.png" x="0" y="0" width="1536" height="1024" preserveAspectRatio="xMidYMid meet" />
 </svg>

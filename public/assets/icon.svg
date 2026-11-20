@@ -1,17 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="WORKBRIDGE app icon: letter W containing two joined hands">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="WORKBRIDGE app icon">
   <title>WORKBRIDGE</title>
-  <rect width="512" height="512" rx="112" fill="#0B2340"/>
-  <!-- Letter W -->
-  <path d="M108 186 L186 392 L256 268 L326 392 L404 186" fill="none" stroke="#FFFFFF" stroke-width="50" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- Two joined hands (handshake) inside the W -->
-  <g fill="#F08A24">
-    <rect x="158" y="222" width="76" height="26" rx="13" transform="rotate(-10 196 235)"/>
-    <rect x="278" y="222" width="76" height="26" rx="13" transform="rotate(10 316 235)"/>
-    <rect x="208" y="196" width="74" height="28" rx="14" transform="rotate(-10 245 210)"/>
-    <rect x="234" y="230" width="74" height="28" rx="14" transform="rotate(-10 271 244)"/>
-  </g>
-  <g stroke="#0B2340" stroke-width="4" stroke-linecap="round">
-    <path d="M245 201 l6 21"/>
-    <path d="M263 199 l6 21"/>
-  </g>
+  <!--
+    Square app-icon presentation of the approved WORKBRIDGE artwork.
+    The mark itself is the exact supplied image (logo.png), centred on the
+    brand's white background. Nothing is redrawn or recoloured.
+    Square 32/180/192/512 raster icons are produced from the same file by
+    scripts/build-icons.js.
+  -->
+  <rect width="512" height="512" fill="#ffffff" />
+  <image href="logo.png" x="26" y="128" width="460" height="256" preserveAspectRatio="xMidYMid meet" />
 </svg>
