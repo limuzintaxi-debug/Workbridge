@@ -1,6 +1,6 @@
 import { esc, ageBadge, pill, money, fmtDate, fmtDateTime } from '../ui.js';
 
-export const LOGO = '/assets/logo.svg';
+export const LOGO = '/assets/logo.png';
 
 export function options(list, selected) {
   return (list || [])

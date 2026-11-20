@@ -16,7 +16,7 @@ export async function homeView(ctx) {
 
   const html = `
   <section class="hero">
-    <img class="hero-logo" src="/assets/logo.svg" alt="WORKBRIDGE logo" width="132" height="132" />
+    <img class="hero-logo" src="/assets/logo.png" alt="WORKBRIDGE logo" width="210" height="140" />
     <h1 class="hero-title">WORKBRIDGE</h1>
     <p class="tagline">Booking • Agreement • Institutional &amp; Social Support • Invoice Maker</p>
     <p class="hero-sub">Connecting Workers, Businesses &amp; Support Organizations</p>
