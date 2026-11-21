@@ -55,7 +55,7 @@ function topbarHtml(path) {
   const role = state.user ? state.user.role : null;
   const links = role ? NAV[role] || [] : PUBLIC_NAV;
   const active = (href) => (`#${path}` === href || (`#${path}`).startsWith(`${href}/`) ? 'active' : '');
-  return `<a class="brand" href="#/"><img src="/assets/logo.png" alt="" width="51" height="34" /><span class="brand-name">WORK<span>BRIDGE</span></span></a>
+  return `<a class="brand" href="#/"><img src="/assets/logo.png?v=2" alt="" width="51" height="34" /><span class="brand-name">WORK<span>BRIDGE</span></span></a>
     <nav>
       ${links
         .map(([href, key]) => `<a href="${href}" class="${active(href)}">${esc(t(key))}</a>`)
@@ -72,7 +72,7 @@ function topbarHtml(path) {
 }
 
 function footerHtml() {
-  return `<div><img class="footer-logo" src="/assets/logo.png" alt="WORKBRIDGE" width="66" height="44" /> WORKBRIDGE — ${esc(t('brand.tagline'))}</div>
+  return `<div><img class="footer-logo" src="/assets/logo.png?v=2" alt="WORKBRIDGE" width="66" height="44" /> WORKBRIDGE — ${esc(t('brand.tagline'))}</div>
     <div style="margin-top:6px">Help &amp; Support: <a href="mailto:Limuzin@196vip.si">Limuzin@196vip.si</a> · <a href="#/institutions">${esc(
       t('home.institutionTitle')
     )}</a></div>

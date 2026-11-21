@@ -5,6 +5,7 @@ import { initStore } from './store.js';
 import { attachSession } from './middleware.js';
 import api from './routes.js';
 import accountRoutes from './routes-account.js';
+import { mountIconRoutes } from './icons.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -27,6 +28,11 @@ app.get('/api/health', (req, res) => {
 });
 
 const publicDir = path.join(config.root, 'public');
+
+// Square brand icons are generated from the approved artwork, so they must be
+// matched before express.static serves the raw (wide) logo file at that path.
+mountIconRoutes(app);
+
 app.use(
   express.static(publicDir, {
     extensions: ['html'],

@@ -1,6 +1,9 @@
 import { esc, ageBadge, pill, money, fmtDate, fmtDateTime } from '../ui.js';
 
-export const LOGO = '/assets/logo.png';
+// The ?v= query is deliberate: it makes every logo URL distinct from the one a
+// previously installed service worker cached, so the approved artwork replaces
+// the old mark instead of being served from cache.
+export const LOGO = '/assets/logo.png?v=2';
 
 export function options(list, selected) {
   return (list || [])

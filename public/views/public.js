@@ -16,7 +16,7 @@ export async function homeView(ctx) {
 
   const html = `
   <section class="hero">
-    <img class="hero-logo" src="/assets/logo.png" alt="WORKBRIDGE logo" width="210" height="140" />
+    <img class="hero-logo" src="/assets/logo.png?v=2" alt="WORKBRIDGE logo" width="210" height="140" />
     <h1 class="hero-title">WORKBRIDGE</h1>
     <p class="tagline">Booking • Agreement • Institutional &amp; Social Support • Invoice Maker</p>
     <p class="hero-sub">Connecting Workers, Businesses &amp; Support Organizations</p>
@@ -226,7 +226,7 @@ export async function authView(ctx) {
 
   const html = `<div class="container" style="max-width:640px">
     <div class="card">
-      <img class="auth-logo" src="/assets/logo.png" alt="WORKBRIDGE logo" width="180" height="120" />
+      <img class="auth-logo" src="/assets/logo.png?v=2" alt="WORKBRIDGE logo" width="180" height="120" />
       <h1>${esc(title)}</h1>
       ${
         role === 'admin'
