@@ -501,15 +501,16 @@ try {
     assert.equal(logo.headers.get('content-type'), 'image/png');
 
     // Every installed-app size must be a real square PNG generated from the
-    // approved artwork, and the manifest must advertise them.
+    // approved artwork. The manifest advertises the PWA sizes; the Apple touch
+    // icon is referenced from the HTML head instead (iOS ignores manifest icons).
     const sizes = [
-      ['/assets/favicon-32.png', 32],
-      ['/assets/apple-touch-icon.png', 180],
-      ['/assets/icon-192.png', 192],
-      ['/assets/icon-512.png', 512],
-      ['/assets/icon-maskable-512.png', 512]
+      ['/assets/favicon-32.png', 32, true],
+      ['/assets/apple-touch-icon.png', 180, false],
+      ['/assets/icon-192.png', 192, true],
+      ['/assets/icon-512.png', 512, true],
+      ['/assets/icon-maskable-512.png', 512, true]
     ];
-    for (const [path, size] of sizes) {
+    for (const [path, size, inManifest] of sizes) {
       const res = await fetch(`${BASE}${path}`);
       assert.equal(res.status, 200, `${path} should be served`);
       assert.equal(res.headers.get('content-type'), 'image/png', `${path} should be a PNG`);
@@ -517,11 +518,19 @@ try {
       assert.equal(bytes.toString('ascii', 1, 4), 'PNG', `${path} should have a PNG signature`);
       assert.equal(bytes.readUInt32BE(16), size, `${path} should be ${size}px wide`);
       assert.equal(bytes.readUInt32BE(20), size, `${path} should be ${size}px tall`);
-      assert.ok(
-        json.icons.some((icon) => icon.src.split('?')[0] === path),
-        `manifest should list ${path}`
-      );
+      if (inManifest) {
+        assert.ok(
+          json.icons.some((icon) => icon.src.split('?')[0] === path),
+          `manifest should list ${path}`
+        );
+      }
     }
+    const head = await fetch(`${BASE}/index.html`).then((r) => r.text());
+    assert.ok(head.includes('apple-touch-icon'), 'index.html should link the Apple touch icon');
+    assert.ok(
+      head.includes('/assets/apple-touch-icon.png'),
+      'index.html should point the Apple touch icon at the generated icon'
+    );
     assert.ok(
       json.icons.some((icon) => icon.purpose === 'maskable'),
       'manifest should include a maskable icon'
