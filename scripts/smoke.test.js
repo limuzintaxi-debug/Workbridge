@@ -499,7 +499,33 @@ try {
     const logo = await fetch(`${BASE}/assets/logo.png`);
     assert.equal(logo.status, 200);
     assert.equal(logo.headers.get('content-type'), 'image/png');
-    assert.ok(json.icons.some((icon) => icon.src === '/assets/logo.png'));
+
+    // Every installed-app size must be a real square PNG generated from the
+    // approved artwork, and the manifest must advertise them.
+    const sizes = [
+      ['/assets/favicon-32.png', 32],
+      ['/assets/apple-touch-icon.png', 180],
+      ['/assets/icon-192.png', 192],
+      ['/assets/icon-512.png', 512],
+      ['/assets/icon-maskable-512.png', 512]
+    ];
+    for (const [path, size] of sizes) {
+      const res = await fetch(`${BASE}${path}`);
+      assert.equal(res.status, 200, `${path} should be served`);
+      assert.equal(res.headers.get('content-type'), 'image/png', `${path} should be a PNG`);
+      const bytes = Buffer.from(await res.arrayBuffer());
+      assert.equal(bytes.toString('ascii', 1, 4), 'PNG', `${path} should have a PNG signature`);
+      assert.equal(bytes.readUInt32BE(16), size, `${path} should be ${size}px wide`);
+      assert.equal(bytes.readUInt32BE(20), size, `${path} should be ${size}px tall`);
+      assert.ok(
+        json.icons.some((icon) => icon.src.split('?')[0] === path),
+        `manifest should list ${path}`
+      );
+    }
+    assert.ok(
+      json.icons.some((icon) => icon.purpose === 'maskable'),
+      'manifest should include a maskable icon'
+    );
   });
 } catch (error) {
   console.error(`\nFatal: ${error.message}`);
