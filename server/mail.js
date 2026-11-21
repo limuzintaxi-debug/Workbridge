@@ -1,52 +1,28 @@
 /**
  * Transactional email for password recovery.
  *
- * Delivery uses SMTP when the server has credentials. For a Gmail account, set:
- *   SMTP_HOST=smtp.gmail.com
- *   SMTP_PORT=587
- *   SMTP_USER=<the Gmail address>
- *   SMTP_PASS=<16-character Google app password>
- *   MAIL_FROM=WORKBRIDGE <the Gmail address>
- *
- * The app password is read from the environment only; it is never written to
- * the repository or sent to the browser.
+ * Delivery itself lives in server/email.js, which supports a Resend API key
+ * (no mailbox password needed) or any SMTP provider, and always sends from
+ * MAIL_FROM. The Help & Support mailbox is never used as a recovery sender or
+ * recipient.
  */
 
-import nodemailer from 'nodemailer';
 import { config } from './config.js';
+import {
+  emailConfigured,
+  emailProvider,
+  senderAddress,
+  sendMail
+} from './email.js';
 
-let transport = null;
+export { emailProvider, sendMail };
 
 export function mailConfigured() {
-  return Boolean(config.smtpHost && config.smtpUser && config.smtpPass);
+  return emailConfigured();
 }
 
 export function mailSender() {
-  return config.mailFrom || config.smtpUser || '';
-}
-
-function getTransport() {
-  if (!mailConfigured()) return null;
-  if (!transport) {
-    transport = nodemailer.createTransport({
-      host: config.smtpHost,
-      port: config.smtpPort,
-      secure: config.smtpSecure,
-      auth: { user: config.smtpUser, pass: config.smtpPass },
-      ...(config.smtpSecure ? {} : { requireTLS: true })
-    });
-  }
-  return transport;
-}
-
-export async function sendMail({ to, subject, text, html }) {
-  const tx = getTransport();
-  if (!tx) {
-    const error = new Error('mail_not_configured');
-    error.code = 'mail_not_configured';
-    throw error;
-  }
-  await tx.sendMail({ from: mailSender(), to, subject, text, html });
+  return senderAddress();
 }
 
 export async function sendPasswordResetEmail({ to, name, link, expiresMinutes = 30 }) {
@@ -74,4 +50,16 @@ export async function sendPasswordResetEmail({ to, name, link, expiresMinutes = 
   </div>`;
 
   await sendMail({ to, subject: 'WORKBRIDGE — reset your password', text, html });
+}
+
+/** Diagnostics for the admin settings screen; never exposes credentials. */
+export function mailStatus() {
+  return {
+    configured: mailConfigured(),
+    provider: emailProvider(),
+    sender: mailSender() || null,
+    support_email_in_use: Boolean(
+      mailSender() && mailSender().toLowerCase().includes(config.supportEmail.toLowerCase())
+    )
+  };
 }

@@ -24,6 +24,13 @@ export const config = {
   smtpUser: process.env.SMTP_USER || '',
   smtpPass: process.env.SMTP_PASS || '',
   mailFrom: process.env.MAIL_FROM || '',
+  // Password-recovery delivery. Resend needs only an API key, so no mailbox
+  // password is required; SMTP remains available for any other provider.
+  resendApiKey: process.env.RESEND_API_KEY || '',
+  emailProvider: (process.env.EMAIL_PROVIDER || '').toLowerCase(),
+  emailCaptureDir: process.env.EMAIL_CAPTURE_DIR || '',
+  // Single-use reset links expire after 30 minutes by default.
+  resetTtlMs: Number(process.env.RESET_TTL_MS || 1000 * 60 * 30),
   seedDemo: process.env.SEED_DEMO === '1'
 };
 

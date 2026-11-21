@@ -19,7 +19,7 @@ import { buildAgreementPdf, buildInvoicePdf } from './pdf.js';
 import { isEmail, str, nowIso } from './util.js';
 
 const router = Router();
-const RESET_TTL_MS = 1000 * 60 * 30;
+const RESET_TTL_MS = config.resetTtlMs;
 const id = () => crypto.randomUUID();
 
 const fail = (res, status, error, message) => res.status(status).json({ error, message });
@@ -86,26 +86,24 @@ router.post('/auth/forgot-password', async (req, res) => {
   };
   if (!isEmail(email)) return res.json(generic);
 
+  // Recovery mail is sent by WORKBRIDGE's own provider to the account's own
+  // registered address. Supabase Auth is deliberately not used here: WORKBRIDGE
+  // accounts live in the app's user store, so GoTrue has no identity to mail and
+  // would answer 200 while sending nothing. This check is global and never
+  // account-specific, so it cannot reveal which emails are registered.
+  if (!mailConfigured()) {
+    return fail(
+      res,
+      503,
+      'email_not_configured',
+      'Password recovery email is not configured yet, so no reset link can be sent. Please contact WORKBRIDGE support.'
+    );
+  }
+
   const user = data().users.find((u) => u.email === email);
   if (!user) return res.json(generic);
 
-  if (supabaseAuthConfigured()) {
-    try {
-      await supaAuth.recover(email);
-    } catch (error) {
-      console.error('[workbridge] Supabase recovery failed:', error.message);
-      return fail(
-        res,
-        502,
-        'recovery_unavailable',
-        'Password recovery email could not be sent. Please try again shortly.'
-      );
-    }
-    return res.json(generic);
-  }
-
-  // Local auth driver: a single-use, hashed, 30-minute token. No email provider
-  // is configured, so the link is written to the server log for the operator.
+  // A single-use, sha256-hashed token that expires after 30 minutes.
   const token = crypto.randomBytes(32).toString('hex');
   data().resetTokens = data().resetTokens.filter(
     (t) => new Date(t.expires_at).getTime() > Date.now() && !t.used_at
@@ -122,34 +120,27 @@ router.post('/auth/forgot-password', async (req, res) => {
 
   const link = `${publicOrigin(req)}/#/reset-password?token=${token}`;
 
-  // Deliver the single-use link to the account holder's inbox. The generic
-  // wording above is kept so the endpoint never reveals which emails exist.
-  let emailed = false;
-  if (mailConfigured()) {
-    try {
-      await sendPasswordResetEmail({
-        to: user.email,
-        name: user.full_name,
-        link,
-        expiresMinutes: Math.round(RESET_TTL_MS / 60000)
-      });
-      emailed = true;
-    } catch (error) {
-      console.error('[workbridge] password reset email failed:', error.message);
-      return fail(
-        res,
-        502,
-        'email_failed',
-        'The reset email could not be sent right now. Please try again, or contact support.'
-      );
-    }
-  } else {
-    console.log(`[workbridge] password reset link for ${email}: ${link}`);
+  // Deliver the single-use link to the account holder's own inbox only. The
+  // generic wording above is kept so the endpoint never reveals which emails
+  // have accounts.
+  try {
+    await sendPasswordResetEmail({
+      to: user.email,
+      name: user.full_name,
+      link,
+      expiresMinutes: Math.max(1, Math.round(RESET_TTL_MS / 60000))
+    });
+  } catch (error) {
+    console.error('[workbridge] password reset email failed:', error.message);
+    return fail(
+      res,
+      502,
+      'email_failed',
+      'The reset email could not be sent right now. Please try again, or contact support.'
+    );
   }
 
-  const payload = { ...generic, email_sent: emailed };
-  if (!emailed && config.nodeEnv !== 'production') payload.dev_reset_url = link;
-  return res.json(payload);
+  return res.json({ ...generic, email_sent: true });
 });
 
 router.post('/auth/reset-password', async (req, res) => {
