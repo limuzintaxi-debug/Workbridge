@@ -14,7 +14,7 @@
  */
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -22,6 +22,9 @@ const PORT = Number(process.env.TEST_PORT || 3199);
 const BASE = `http://127.0.0.1:${PORT}`;
 const SECRET = 'test-session-secret-for-workbridge-restart-verification';
 const dataDir = await mkdtemp(path.join(os.tmpdir(), 'wb-final-'));
+// Capture outbox: recovery mail is written here instead of being sent, so the
+// flow is verifiable without real provider credentials.
+const outboxDir = path.join(dataDir, 'outbox');
 
 let child = null;
 
@@ -35,7 +38,9 @@ function start() {
       NODE_ENV: 'test',
       SMTP_HOST: '',
       SMTP_USER: '',
-      SMTP_PASS: ''
+      SMTP_PASS: '',
+      EMAIL_CAPTURE_DIR: outboxDir,
+      MAIL_FROM: 'WORKBRIDGE <no-reply@workbridges.live>'
     },
     stdio: ['ignore', 'ignore', 'pipe']
   });
@@ -222,9 +227,18 @@ try {
       body: { email: 'worker@workbridge.test' }
     });
     assert.equal(forgot.status, 200, forgot.text);
-    const link = (forgot.json && (forgot.json.reset_url || forgot.json.dev_reset_url)) || '';
-    const match = /token=([A-Za-z0-9._-]+)/.exec(link);
-    assert.ok(match, `expected a reset link, got ${forgot.text}`);
+    assert.equal(forgot.json.email_sent, true, 'the reset email must reach the provider');
+
+    const outbox = (await readFile(path.join(outboxDir, 'outbox.jsonl'), 'utf8'))
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+    const mail = outbox.filter((message) => message.to === 'worker@workbridge.test').pop();
+    assert.ok(mail, `expected a reset email, outbox holds ${outbox.length} message(s)`);
+    assert.match(mail.from, /no-reply@workbridges\.live/, 'sender must be MAIL_FROM');
+
+    const match = /token=([A-Za-z0-9._-]+)/.exec(String(mail.text));
+    assert.ok(match, `expected a reset link in the email, got ${mail.text}`);
     const token = match[1];
 
     const reset = await call('/api/auth/reset-password', {
