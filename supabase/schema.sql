@@ -613,3 +613,19 @@ on conflict (id) do nothing;
 
 revoke all on public.password_reset_tokens from anon, authenticated;
 grant select on public.institution_directory to anon, authenticated;
+
+-- ---------------------------------------------------------------- privileges --
+-- The SQL editor runs as `postgres`, and tables created here are not readable
+-- by the API roles by default. That is why the server logged
+--   supabase_403: permission denied for table users   (Postgres error 42501)
+-- even with a correct service-role key. The grants below fix it. Row Level
+-- Security above still decides what an end user may see; the service role is
+-- only ever used server-side, never in the browser.
+
+grant usage on schema public to service_role;
+grant all privileges on all tables in schema public to service_role;
+grant all privileges on all sequences in schema public to service_role;
+
+-- Keep future tables created in this schema usable without re-running the file.
+alter default privileges in schema public grant all on tables to service_role;
+alter default privileges in schema public grant all on sequences to service_role;
