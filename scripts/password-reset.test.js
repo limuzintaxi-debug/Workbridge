@@ -50,7 +50,7 @@ async function step(name, fn) {
 
 /** Child env with no provider credentials, so the capture outbox is used. */
 function childEnv(extra = {}) {
-  const env = { ...process.env, NODE_ENV: 'test', ...extra };
+  const env = { ...process.env };
   for (const key of [
     'SUPABASE_URL',
     'SUPABASE_ANON_KEY',
@@ -65,7 +65,8 @@ function childEnv(extra = {}) {
   ]) {
     delete env[key];
   }
-  return env;
+  // Explicit values from the caller win, including EMAIL_CAPTURE_DIR.
+  return { ...env, NODE_ENV: 'test', ...extra };
 }
 
 function startServer({ port, env }) {
