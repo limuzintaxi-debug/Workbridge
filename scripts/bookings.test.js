@@ -526,7 +526,7 @@ try {
 
     const mine = await business.get('/api/bookings/mine');
     const booking = mine.json.bookings.find((b) => b.id === bookingId);
-    const stages = booking.events.map((event) => event.type);
+    const stages = booking.events.map((event) => event.status);
     for (const expected of ['created', 'selected', 'confirmed', 'pickup', 'dropoff', 'complete_order', 'paid', 'completed']) {
       assert.ok(stages.includes(expected), `missing recorded stage: ${expected}`);
     }
