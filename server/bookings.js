@@ -223,9 +223,11 @@ export function bookingView(booking, viewer) {
 
   // Business identity is visible to the selected driver only after acceptance.
   if (isBusinessOwner || (isSelectedDriver && unlocked) || isAdminViewer) {
-    view.business = isAdminViewer && !isBusinessOwner ? businessContact(booking.business_id) : businessContact(booking.business_id);
+    view.business = businessContact(booking.business_id);
   }
-  if (isSelectedDriver && unlocked) {
+  // The business also needs the confirmed driver's number, otherwise the two
+  // parties still cannot call each other after acceptance.
+  if (unlocked && booking.selected_driver_id && (isSelectedDriver || isBusinessOwner || isAdminViewer)) {
     view.driver = driverContact(booking.selected_driver_id);
   }
 
