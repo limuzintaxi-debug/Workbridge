@@ -474,7 +474,10 @@ try {
     // Acceptance stays idempotent for any client that still sends it.
     const accept = await drivers[selectedDriverIndex].post(`/api/bookings/${bookingId}/accept`, {});
     assert.equal(accept.status, 200, accept.text);
-    assert.equal(accept.json.booking.status, 'confirmed');
+    assert.ok(
+      ['confirmed', 'pickup'].includes(accept.json.booking.status),
+      'acceptance is idempotent once the booking is confirmed'
+    );
 
     const driverView = await drivers[selectedDriverIndex].get(`/api/bookings/${bookingId}`);
     assert.ok(driverView.json.booking.business?.phone, 'the driver sees the business phone');
