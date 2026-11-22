@@ -106,6 +106,14 @@ export function visibleOffers(booking) {
   return validOffers(booking).slice(0, OFFER_VISIBLE_LIMIT);
 }
 
+/**
+ * Offers that can still be chosen. Once a driver is selected the other offers
+ * are closed (kept as history) and must no longer be selectable or actionable.
+ */
+export function openOffers(booking) {
+  return validOffers(booking).filter((offer) => !offer.closed_reason);
+}
+
 /** Contact details unlock only after the selected driver accepts. */
 export function contactUnlocked(booking) {
   return stageIndex(booking.status) >= stageIndex('confirmed');
@@ -280,10 +288,17 @@ export function customerBookingView(booking) {
       price: booking.selected_price || 0
     };
   }
+  const all = validOffers(booking);
+  // Before a choice the customer compares the offers; afterwards the page shows
+  // the driver they picked, with the closed offers counted but not offered again.
+  const shown = booking.selected_offer_id
+    ? all.filter((offer) => offer.id === booking.selected_offer_id)
+    : visibleOffers(booking);
   return {
     ...base,
-    offers: visibleOffers(booking).map(offerView),
-    offer_count: validOffers(booking).length,
+    offers: shown.map(offerView),
+    offer_count: all.length,
+    closed_offer_count: all.filter((offer) => offer.closed_reason).length,
     eligible_driver_count: eligibleDrivers(booking).length,
     selected_driver: selectedDriver,
     customer_name: booking.customer_name || '',
