@@ -286,6 +286,28 @@ async function render() {
       : 'WORKBRIDGE — Booking • Agreement • Institutional & Social Support • Invoice Maker';
     renderedHash = currentHash();
 
+    // Panel share link: shares that panel's own sign-in URL. A shared link only
+    // opens a login form — the recipient still needs their own authorized account.
+    for (const button of document.querySelectorAll('[data-share-url]')) {
+      button.addEventListener('click', async () => {
+        const url = new URL(button.dataset.shareUrl || '#/', location.href).href;
+        if (navigator.share) {
+          try {
+            await navigator.share({ title: 'WORKBRIDGE sign in', url });
+          } catch {
+            /* the user dismissed the share sheet */
+          }
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(url);
+          toast('Login link copied');
+        } catch {
+          window.prompt('Copy this login link', url);
+        }
+      });
+    }
+
     for (const button of document.querySelectorAll('[data-signout]')) {
       button.addEventListener('click', async () => {
         try {
