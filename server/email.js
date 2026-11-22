@@ -27,6 +27,25 @@ import { config } from './config.js';
 
 let smtpTransport = null;
 
+/**
+ * Resend refuses to send from a domain that is not verified, and its shared test
+ * sender can only reach the account owner's own address. Keeping the exact last
+ * attempt lets the admin screen show what really happened instead of assuming
+ * that a 2xx response meant an email was delivered.
+ */
+const RESEND_TEST_SENDER = 'onboarding@resend.dev';
+let lastAttempt = null;
+
+function rememberAttempt(attempt) {
+  lastAttempt = { ...attempt, at: new Date().toISOString() };
+  return lastAttempt;
+}
+
+/** Exact result of the most recent send attempt; never contains credentials. */
+export function getLastEmailAttempt() {
+  return lastAttempt || null;
+}
+
 const fail = (code, message) => {
   const error = new Error(message);
   error.code = code;
@@ -90,26 +109,58 @@ function transport() {
   return smtpTransport;
 }
 
-async function sendWithResend({ from, to, subject, text, html }) {
+async function postResend(payload) {
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${config.resendApiKey}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ from, to: [to], subject, text, html })
+    body: JSON.stringify(payload)
   });
-  if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    // Never include request headers here: they carry the API key.
-    if (/not verified|domain/i.test(detail) && response.status === 403) {
+  // Never surface request headers here: they carry the API key.
+  const detail = response.ok ? '' : await response.text().catch(() => '');
+  return { ok: response.ok, status: response.status, detail };
+}
+
+/**
+ * Send through Resend, falling back to Resend's shared test sender.
+ *
+ * A 403 "domain is not verified" is a configuration gap, not a dead end: the
+ * shared sender still delivers to the account owner's address, which keeps
+ * password recovery usable while DNS verification is pending. The reply reports
+ * which sender actually carried the message so callers never guess.
+ */
+async function sendWithResend({ from, to, subject, text, html }) {
+  const first = await postResend({ from, to: [to], subject, text, html });
+  if (first.ok) return { sender: from, fallback: false };
+
+  const unverified =
+    first.status === 403 && /not verified|verify a domain|testing emails/i.test(first.detail);
+  const fallbackFrom = `WORKBRIDGE <${RESEND_TEST_SENDER}>`;
+
+  if (unverified && from !== fallbackFrom) {
+    const second = await postResend({ from: fallbackFrom, to: [to], subject, text, html });
+    if (second.ok) return { sender: fallbackFrom, fallback: true };
+    if (/own email address/i.test(second.detail)) {
       throw fail(
-        'email_domain_unverified',
-        'The sending domain is not verified with Resend. Add the domain in resend.com/domains and publish its DNS records, then retry.'
+        'email_recipient_not_allowed',
+        `Resend has no verified domain, so it can only deliver to the account owner's own address. Verify the sending domain at resend.com/domains (publish its DNS records) or set SMTP_PASS. Provider said: ${second.detail.slice(0, 240)}`
       );
     }
-    throw fail('email_provider_error', `resend_${response.status}: ${detail.slice(0, 300)}`);
+    throw fail(
+      'email_domain_unverified',
+      `The sending domain is not verified with Resend. Add the domain in resend.com/domains and publish its DNS records, then retry. Provider said: ${second.detail.slice(0, 240)}`
+    );
   }
+
+  if (unverified) {
+    throw fail(
+      'email_domain_unverified',
+      `The sending domain is not verified with Resend. Add the domain in resend.com/domains and publish its DNS records, then retry. Provider said: ${first.detail.slice(0, 240)}`
+    );
+  }
+  throw fail('email_provider_error', `resend_${first.status}: ${first.detail.slice(0, 300)}`);
 }
 
 export async function sendMail({ to, subject, text, html }) {
@@ -137,11 +188,29 @@ export async function sendMail({ to, subject, text, html }) {
     throw fail('email_sender_missing', 'MAIL_FROM must be set to the verified sender address.');
   }
 
-  if (provider === 'resend') {
-    await sendWithResend({ from, to, subject, text, html });
-    return { provider: 'resend' };
-  }
+  try {
+    if (provider === 'resend') {
+      const sent = await sendWithResend({ from, to, subject, text, html });
+      return rememberAttempt({
+        ok: true,
+        provider: 'resend',
+        sender: sent.sender,
+        fallback_sender: sent.fallback,
+        recipient: to
+      });
+    }
 
-  await transport().sendMail({ from, to, subject, text, html });
-  return { provider: 'smtp' };
+    await transport().sendMail({ from, to, subject, text, html });
+    return rememberAttempt({ ok: true, provider: 'smtp', sender: from, recipient: to });
+  } catch (error) {
+    rememberAttempt({
+      ok: false,
+      provider,
+      sender: from,
+      recipient: to,
+      code: error.code || 'email_error',
+      message: error.message
+    });
+    throw error;
+  }
 }
