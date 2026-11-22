@@ -323,3 +323,18 @@ html[dir="rtl"] .split { direction: rtl; }
 @media (max-width: 480px) {
   .inv-head, .inv-row { grid-template-columns: 1.15fr 0.72fr 0.85fr 1fr; font-size: 0.67rem; padding: 8px 6px; gap: 4px; }
 }
+
+/* ---- iPhone / installed PWA: keep controls clear of the notch and home bar ---- */
+@supports (padding: env(safe-area-inset-top)) {
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  .topbar { padding-top: calc(10px + env(safe-area-inset-top)); }
+  .view { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+  .footer { padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
+}
+@media (display-mode: standalone) {
+  html, body { overscroll-behavior-y: contain; }
+  .topbar { padding-top: calc(12px + env(safe-area-inset-top)); }
+}
