@@ -415,7 +415,7 @@ try {
     selectedDriverIndex = prices.indexOf(400);
   });
 
-  await step('the business selects a driver and contacts stay hidden until acceptance', async () => {
+  await step('the business selects a driver and only that driver gets the business contact', async () => {
     const select = await business.post(`/api/bookings/${bookingId}/select`, {
       offer_id: selectedOffer.id
     });
@@ -426,11 +426,15 @@ try {
     assert.equal(asDriver.status, 200, asDriver.text);
     assert.equal(asDriver.json.booking.status, 'selected');
     const businessContact = asDriver.json.booking.business;
-    assert.ok(!businessContact || !businessContact.phone, 'contact must stay locked before acceptance');
+    assert.ok(
+      businessContact && businessContact.phone,
+      'the chosen driver receives the business contact as soon as they are selected'
+    );
 
-    // A driver who offered may track the booking, but the business contact
-    // stays locked until the selected driver accepts.
-    const notSelected = await drivers[0].get(`/api/bookings/${bookingId}`);
+    // A driver who offered but was not chosen may track the booking, yet the
+    // business contact must never reach them.
+    const otherIndex = (selectedDriverIndex + 1) % drivers.length;
+    const notSelected = await drivers[otherIndex].get(`/api/bookings/${bookingId}`);
     assert.equal(notSelected.status, 200, notSelected.text);
     const notSelectedBusiness = notSelected.json.booking.business;
     assert.ok(
