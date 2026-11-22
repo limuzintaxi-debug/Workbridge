@@ -168,8 +168,12 @@ export function bookingView(booking, viewer) {
     : null;
 
   let offers = [];
+  let eligibleCount = 0;
   if (isBusinessOwner || isAdminViewer) {
     offers = visibleOffers(booking).map(offerView);
+    // How many approved drivers the request actually reached, so the business
+    // can see that offers are still coming in rather than guessing.
+    eligibleCount = eligibleDrivers(booking).length;
   } else if (viewer && viewer.role === 'worker') {
     offers = myOffer ? [offerView(myOffer)] : [];
   }
@@ -195,6 +199,7 @@ export function bookingView(booking, viewer) {
     updated_at: booking.updated_at,
     offers,
     offer_count: validOffers(booking).length,
+    eligible_driver_count: eligibleCount,
     my_offer: myOffer ? offerView(myOffer) : null,
     selected_offer_id: booking.selected_offer_id || null,
     selected_driver_id: booking.selected_driver_id || null,

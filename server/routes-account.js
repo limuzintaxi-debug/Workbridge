@@ -445,26 +445,16 @@ router.get('/documents/link', requireRole('worker', 'business', 'admin'), async 
 
 /* ------------------------------------------------- owner admin recovery */
 
-const maskEmail = (value) => {
-  const email = String(value || '');
-  const at = email.indexOf('@');
-  if (at < 1) return '';
-  return `${email.slice(0, 2)}***${email.slice(at)}`;
-};
-
 /**
- * Public, read-only description of the administrator identity. It never returns
- * a full administrator address, only a masked hint, so the login screen can tell
- * the owner whether an account exists without leaking it to visitors.
+ * Public, read-only setup state. It deliberately carries no owner identity at
+ * all — no email, username, id or masked hint — so opening the Admin login can
+ * never reveal who the owner is. Owner sign-in lives on its own private page.
  */
 router.get('/auth/owner-status', (req, res) => {
   const users = data().users || [];
   const owner = users.find((u) => u.role === 'owner');
   const admins = users.filter((u) => u.role === 'admin');
   res.json({
-    owner_exists: Boolean(owner),
-    admin_count: admins.length,
-    owner_email_masked: maskEmail(owner && owner.email),
     setup_required: !owner && admins.length === 0,
     recovery_enabled: Boolean(config.setupToken)
   });

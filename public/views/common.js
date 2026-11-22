@@ -43,11 +43,32 @@ export function tabsBar(tabs, path) {
     .join('')}</nav>`;
 }
 
+/**
+ * Every panel can share its own sign-in page. The owner entry is only rendered
+ * inside the owner panel, which the server guards with role 'owner', so the
+ * owner login URL never appears in public pages or in an ordinary admin panel.
+ * A shared link only opens a login form — it never grants access.
+ */
+const PANEL_LOGIN = {
+  worker: '#/worker/signin',
+  business: '#/business/signin',
+  admin: '#/admin/signin',
+  owner: '#/owner/signin'
+};
+
+function shareButton(path) {
+  const panel = String(path || '').replace(/^#\//, '').split('/')[0];
+  const target = PANEL_LOGIN[panel];
+  if (!target) return '';
+  return `<button type="button" class="btn btn-ghost btn-sm" data-share-panel="${panel}" data-share-url="${target}">Share link</button>`;
+}
+
 export function panelShell({ title, subtitle, tabs, path, body }) {
+  const share = shareButton(path);
   return `<div class="container">
     <div class="section-head"><div><h1>${esc(title)}</h1>${
       subtitle ? `<p class="muted" style="margin:0">${esc(subtitle)}</p>` : ''
-    }</div></div>
+    }</div>${share ? `<div class="btn-row">${share}</div>` : ''}</div>
     ${tabs ? tabsBar(tabs, path) : ''}
     ${body}
   </div>`;

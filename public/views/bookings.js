@@ -93,14 +93,23 @@ function meta(booking) {
 
 function offersTable(booking) {
   const offers = offersOf(booking);
-  if (!offers.length) return `<p class="muted">No driver offers yet. Eligible drivers were notified.</p>`;
+  const eligible = Number(booking.eligible_driver_count) || 0;
+  if (!offers.length) {
+    return `<p class="muted">No driver offers yet.${
+      eligible ? ` Sent to ${eligible} approved driver(s) for ${esc(booking.vehicle_category)}.` : ''
+    } Offers appear here as drivers submit their price.</p>`;
+  }
   const open = ['created', 'offers'].includes(booking.status);
+  const total = Number(booking.offer_count) || offers.length;
   return `<div class="offer-list">
-    <div class="offer-head"><span>Driver vehicle</span><span>Category</span><span>Offer</span><span></span></div>
+    <div class="offer-head"><span>Driver / vehicle</span><span>Category</span><span>Offer</span><span></span></div>
     ${offers
       .map(
         (offer, index) => `<div class="offer-row">
-          <span>${esc(offer.vehicle_name)}${index === 0 ? ' <span class="tag">lowest</span>' : ''}</span>
+          <span><b>${esc(offer.driver_name || 'Driver')}</b>
+            <div class="muted">${esc(offer.vehicle_name)}${
+              index === 0 ? ' <span class="tag">lowest</span>' : ''
+            }</div></span>
           <span>${esc(offer.vehicle_category)}</span>
           <span class="offer-price">${amount(offer.price, booking.currency)}</span>
           <span>${
@@ -112,7 +121,9 @@ function offersTable(booking) {
       )
       .join('')}
   </div>
-  <p class="muted" style="margin:6px 0 0">Only the four lowest valid offers are shown. You choose the driver.</p>`;
+  <p class="muted" style="margin:6px 0 0">Showing the ${offers.length} lowest valid offer${
+    offers.length === 1 ? '' : 's'
+  } of ${total} received. You choose the driver — the cheapest is never assigned automatically.</p>`;
 }
 
 function paymentBlock(booking) {
