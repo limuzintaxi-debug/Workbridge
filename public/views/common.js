@@ -57,7 +57,12 @@ const PANEL_LOGIN = {
 };
 
 function shareButton(path) {
-  const panel = String(path || '').replace(/^#\//, '').split('/')[0];
+  // Views pass either '#/business' or '/business', so strip an optional hash and
+  // any leading slashes before reading the panel segment.
+  const panel = String(path || '')
+    .replace(/^#/, '')
+    .replace(/^\/+/, '')
+    .split('/')[0];
   const target = PANEL_LOGIN[panel];
   if (!target) return '';
   return `<button type="button" class="btn btn-ghost btn-sm" data-share-panel="${panel}" data-share-url="${target}">Share link</button>`;
