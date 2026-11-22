@@ -227,6 +227,18 @@ router.post('/owner/admins', requireRole('owner'), (req, res) => {
 
 /* ------------------------------------------------------------- ride booking */
 
+/**
+ * Public: the booking page needs to know whether ride booking is currently open
+ * so a customer is not shown a form that can only fail on submit. It exposes the
+ * on/off flag and the category list only — never worker or admin data.
+ */
+router.get('/ride-bookings/open', (req, res) => {
+  res.json({
+    open: rideBookingSettings().enabled === true,
+    categories: VEHICLE_CATEGORIES
+  });
+});
+
 router.get('/ride-booking/settings', requireRole('admin'), (req, res) => {
   const workers = filterByScope(
     req.user,
