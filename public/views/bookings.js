@@ -58,13 +58,15 @@ function progress(status) {
 
 /** Contact details only exist in the payload once the driver has accepted. */
 function contactOf(booking) {
-  const contact = booking.contact || {};
-  const phone = contact.phone || booking.contact_phone || '';
-  const whatsapp = contact.whatsapp || contact.phone || phone;
+  const party = booking.driver || booking.business || null;
+  if (!party) return '';
+  const name = party.company_name || party.contact_name || party.name || '';
+  const phone = party.phone || '';
+  const whatsapp = party.whatsapp || phone;
   if (!phone) return '';
   const digits = String(whatsapp).replace(/[^\d]/g, '');
   return `<div class="contact-box">
-    <strong>${esc(contact.name || 'Contact')}</strong>
+    <strong>${esc(name)}</strong>
     <div><a href="tel:${esc(phone)}">${esc(phone)}</a></div>
     ${digits ? `<div><a href="https://wa.me/${esc(digits)}" target="_blank" rel="noopener">WhatsApp</a></div>` : ''}
   </div>`;
