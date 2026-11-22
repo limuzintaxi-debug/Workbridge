@@ -10,6 +10,7 @@ import * as account from './views/account.js';
 import * as ride from './views/ride.js';
 import * as mall from './views/mall.js';
 import * as owner from './views/owner.js';
+import { openAgreementView } from './views/agreement-open.js';
 
 const state = { user: null, meta: null };
 
@@ -21,6 +22,7 @@ const NAV = {
     ['#/worker/jobs', 'nav.findWork'],
     ['#/worker/applications', 'nav.applications'],
     ['#/worker/agreements', 'nav.agreements'],
+    ['#/agreement/new', 'New Agreement'],
     ['#/worker/invoices', 'nav.invoices'],
     ['#/worker/notifications', 'nav.alerts'],
     ['#/worker/ride-bookings', 'Ride Booking'],
@@ -33,6 +35,7 @@ const NAV = {
     ['#/business/workers', 'nav.workers'],
     ['#/business/applications', 'nav.applications'],
     ['#/business/agreements', 'nav.agreements'],
+    ['#/agreement/new', 'New Agreement'],
     ['#/business/invoices', 'nav.invoices'],
     ['#/mall', 'Mall'],
     ['#/business/profile', 'nav.profile']
@@ -157,6 +160,9 @@ async function route(path, parts, query) {
   if (path === '/mall') return mall.mallView(ctx);
   if (path === '/admin-apply') return owner.applyView(ctx);
   if (path === '/worker/ride-bookings') return guard('worker', ctx) || ride.workerRideView(ctx);
+  if (path === '/agreement/new') {
+    return guardAny(['worker', 'business', 'admin'], ctx) || openAgreementView(ctx);
+  }
 
   const authMatch = path.match(/^\/(worker|business|admin)\/(signin|signup)$/);
   if (authMatch) {
