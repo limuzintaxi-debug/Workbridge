@@ -693,6 +693,117 @@ try {
     }
   });
 
+  await step('the assigned driver can receive payment and complete a business booking', async () => {
+    // A second booking proves the driver-side buttons end to end: an offer with
+    // only a price and a vehicle name, acceptance, the ride stages, then payment
+    // and completion recorded by the driver.
+    const created = await business.post('/api/bookings', {
+      pickup: 'King Fahd Road',
+      destination: 'Airport Terminal 5',
+      date: '2030-03-04',
+      time: '09:15',
+      vehicle_category: 'VIP',
+      details: 'Two large suitcases'
+    });
+    assert.equal(created.status, 201, created.text);
+    const secondId = created.json.booking.id;
+
+    // The offer form asks for price and vehicle name only — no category field.
+    const offer = await drivers[selectedDriverIndex].post(`/api/bookings/${secondId}/offers`, {
+      vehicle_name: 'Toyota Fortuner',
+      price: 275
+    });
+    assert.equal(offer.status, 200, offer.text);
+
+    const listed = await business.get('/api/bookings/mine');
+    const second = listed.json.bookings.find((row) => row.id === secondId);
+    const myOffer = (second.offers || [])[0];
+    assert.ok(myOffer, 'the driver offer reaches the business dashboard');
+    assert.equal(myOffer.vehicle_name, 'Toyota Fortuner', 'the vehicle name travels with the offer');
+    assert.equal(myOffer.vehicle_category, 'VIP', 'the category is taken from the booking');
+    assert.equal(myOffer.price, 275);
+
+    const select = await business.post(`/api/bookings/${secondId}/select`, { offer_id: myOffer.id });
+    assert.equal(select.status, 200, select.text);
+    assert.equal(select.json.booking.status, 'selected');
+
+    // "Accept Booking"
+    const accept = await drivers[selectedDriverIndex].post(`/api/bookings/${secondId}/accept`, {});
+    assert.equal(accept.status, 200, accept.text);
+    assert.equal(accept.json.booking.status, 'confirmed');
+
+    // "Pick Up Customer" → "Drop-off Customer" → "Order Completed"
+    for (const [path, expected] of [
+      ['pickup', 'pickup'],
+      ['dropoff', 'dropoff'],
+      ['complete-order', 'complete_order']
+    ]) {
+      const moved = await drivers[selectedDriverIndex].post(`/api/bookings/${secondId}/${path}`, {});
+      assert.equal(moved.status, 200, moved.text);
+      assert.equal(moved.json.booking.status, expected);
+    }
+
+    // "Receive Payment" — the assigned driver records the fare they collected.
+    const pay = await drivers[selectedDriverIndex].post(`/api/bookings/${secondId}/payment`, {
+      amount: 275,
+      reference: 'DRV-275-OK',
+      method: 'cash'
+    });
+    assert.equal(pay.status, 200, pay.text);
+    assert.equal(pay.json.booking.status, 'paid');
+    assert.equal(pay.json.booking.payment.commission_rate, 2);
+    assert.equal(pay.json.booking.payment.commission_amount, 5.5);
+
+    const doublePay = await drivers[selectedDriverIndex].post(`/api/bookings/${secondId}/payment`, {
+      amount: 275,
+      reference: 'DRV-DUP'
+    });
+    assert.equal(doublePay.status, 409, 'payment cannot be recorded twice');
+
+    // "Booking Completed"
+    const done = await drivers[selectedDriverIndex].post(`/api/bookings/${secondId}/finalize`, {});
+    assert.equal(done.status, 200, done.text);
+    assert.equal(done.json.booking.status, 'completed');
+
+    // Business and driver dashboards agree on the final status.
+    const after = await business.get('/api/bookings/mine');
+    const asBusiness = after.json.bookings.find((row) => row.id === secondId);
+    assert.equal(asBusiness.status, 'completed', 'the business dashboard shows the completed status');
+    assert.ok(!asBusiness.driver?.phone, 'phones stay hidden after completion');
+    const asDriver = await drivers[selectedDriverIndex].get(`/api/bookings/${secondId}`);
+    assert.equal(asDriver.json.booking.status, 'completed', 'the driver dashboard agrees');
+  });
+
+  await step('the dashboard renders the stages once and the driver actions only', async () => {
+    // The stage list is client-rendered, so assert on the template itself: it
+    // belongs at the top of the page once, never under an individual booking.
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(new URL('../public/views/bookings.js', import.meta.url), 'utf8');
+    const businessCard = src.slice(
+      src.indexOf('function businessCard'),
+      src.indexOf('export async function businessBookingsView')
+    );
+    assert.ok(businessCard.length > 200, 'the business card template is present');
+    assert.ok(!businessCard.includes('progress('), 'no stage list inside a business booking');
+    assert.ok(!businessCard.includes('stage-list'), 'no numbered stage list under a booking');
+    assert.ok(!businessCard.includes('data-stage'), 'action buttons stay out of the business dashboard');
+    assert.ok(src.includes('function stageStrip'), 'the stages are shown once as a single line');
+    assert.ok(src.includes('${stageStrip()}'), 'the stage strip is placed on the dashboard');
+
+    const driverCard = src.slice(src.indexOf('function driverCard'), src.indexOf('function offerForm'));
+    for (const label of [
+      'Accept Booking',
+      'Pick Up Customer',
+      'Drop-off Customer',
+      'Order Completed',
+      'Receive Payment',
+      'Booking Completed'
+    ]) {
+      assert.ok(driverCard.includes(label), `driver action missing: ${label}`);
+    }
+    assert.ok(!driverCard.includes('progress('), 'the driver card does not repeat the stage list');
+  });
+
   console.log(`\n${passed} passed\n`);
 } catch (error) {
   console.error(error);
