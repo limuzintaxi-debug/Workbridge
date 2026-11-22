@@ -3,7 +3,10 @@ import { esc, toast, busy, formObject } from '../ui.js';
 import { t } from '../i18n.js';
 import { options, institutionsCard } from './common.js';
 
-const PANEL_HOME = { worker: '#/worker', business: '#/business', admin: '#/admin' };
+// Must stay in sync with PANEL_HOME in app.js: without the 'owner' entry the
+// owner signs in through #/admin/signin and is dropped into the Primary Admin
+// dashboard instead of the separate Owner panel.
+const PANEL_HOME = { worker: '#/worker', business: '#/business', admin: '#/admin', owner: '#/owner' };
 const SUPPORT_EMAIL = 'Limuzin@196vip.si';
 
 export async function homeView(ctx) {
