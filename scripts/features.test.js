@@ -128,6 +128,8 @@ try {
   await waitForServer();
   console.log('\nWORKBRIDGE feature test\n');
 
+  let workerId = null;
+
   await step('the first administrator is the platform owner', async () => {
     const created = await anon.post('/api/setup/admin', {
       email: `owner${stamp}@workbridge.test`,
@@ -204,7 +206,6 @@ try {
   /* --------------------------------------------------- owner / admin scope */
 
   let regionalAdminId = null;
-  let workerId = null;
 
   await step('anyone can apply for admin access and it waits for the owner', async () => {
     const applied = await anon.post('/api/admin-applications', {
