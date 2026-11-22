@@ -338,3 +338,24 @@ html[dir="rtl"] .split { direction: rtl; }
   html, body { overscroll-behavior-y: contain; }
   .topbar { padding-top: calc(12px + env(safe-area-inset-top)); }
 }
+
+/* One-line booking stage strip: shown once per dashboard, never per booking. */
+.stage-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  align-items: center;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #5a6b85;
+  background: #f6f9fc;
+  border: 1px solid #e2e9f3;
+  border-radius: 10px;
+}
+.stage-line span[aria-hidden='true'] { color: #9aa8bd; }
+
+/* Driver action row: all six stages visible, only the current one clickable. */
+.driver-actions { gap: 8px; flex-wrap: wrap; }
+.tag-done { background: #e9f6ee; color: #1c6b38; border-color: #bfe3cb; }
