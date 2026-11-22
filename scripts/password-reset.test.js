@@ -264,7 +264,7 @@ try {
         password: NEW_PASSWORD
       });
       assert.equal(login.status, 200, login.text);
-      assert.equal(login.json.user.role, role);
+      assert.equal(login.json.user.role, accounts[role].role);
 
       const me = await fresh.get('/api/auth/me');
       assert.equal(me.json.user.email, account.email);
