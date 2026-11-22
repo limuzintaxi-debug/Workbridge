@@ -83,13 +83,29 @@ export async function resetPasswordView(ctx) {
         try {
           const res = await api.post('/auth/forgot-password', formObject(form));
           const box = document.getElementById('forgot-result');
-          box.innerHTML = `<div class="notice">${esc(res.message || t('auth.resetSent'))}</div>`;
+          const typedEmail = String(formObject(form).email || '').trim();
+          // A green message is only shown when the server confirms an email was
+          // actually handed to the provider. Anything else states the real reason.
+          if (res.email_sent) {
+            box.innerHTML = `<div class="notice">Reset link sent to <strong>${esc(
+              typedEmail
+            )}</strong>. It works once and expires in 30 minutes. If it does not arrive within a few minutes, check the spam folder.</div>`;
+            toast('Reset link sent', 'success');
+          } else if (res.account_found === false) {
+            box.innerHTML = `<div class="notice" style="border-color:#c62828;color:#c62828">No WORKBRIDGE account uses <strong>${esc(
+              typedEmail
+            )}</strong>, so no email was sent. Enter the exact address you registered with, or create an account.</div>`;
+            toast('No account uses that email', 'error');
+          } else {
+            box.innerHTML = `<div class="notice">${esc(
+              res.message || 'Check your inbox for the reset link.'
+            )}</div>`;
+          }
           if (res.reset_url) {
             box.innerHTML += `<p class="sig-hint">Development helper — open your reset link: <a href="${esc(
               res.reset_url
             )}">${esc(res.reset_url)}</a></p>`;
           }
-          toast(t('auth.resetSent'), 'success');
         } catch (error) {
           toast(error.message, 'error');
         } finally {
