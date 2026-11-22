@@ -10,7 +10,7 @@ import * as account from './views/account.js?v=23';
 import * as ride from './views/ride.js?v=23';
 import * as mall from './views/mall.js?v=23';
 import * as owner from './views/owner.js?v=23';
-import * as bookings from './views/bookings.js?v=24';
+import * as bookings from './views/bookings.js?v=25';
 import { openAgreementView } from './views/agreement-open.js?v=23';
 
 const state = { user: null, meta: null };
