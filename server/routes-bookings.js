@@ -46,7 +46,11 @@ function notify(userId, title, body, link) {
   });
 }
 
-const findBooking = (id) => (data().rideBookings || []).find((b) => b.id === id && b.kind === 'business');
+/** Business bookings and customer "Book Your Car" bookings share one pipeline. */
+const isBookingRecord = (b) => Boolean(b && (b.kind === 'business' || b.kind === 'customer'));
+
+const findBooking = (id) =>
+  (data().rideBookings || []).find((b) => b.id === id && isBookingRecord(b));
 
 /** Only an approved, active business may book. */
 function bookingBusiness(req, res, next) {
@@ -160,6 +164,20 @@ router.post('/bookings/:id/select', bookingBusiness, (req, res) => {
   booking.selected_vehicle = offer.vehicle_name;
   pushEvent(booking, 'selected', req.user);
 
+  // Every other offer is closed, so only the selected driver can still act.
+  for (const other of booking.offers || []) {
+    if (other.id === offer.id || other.withdrawn) continue;
+    other.withdrawn = true;
+    other.closed_reason = 'assigned';
+    other.closed_at = nowIso();
+    notify(
+      other.driver_id,
+      'Booking assigned',
+      `${booking.ref} was assigned to another driver.`,
+      '#/worker/bookings'
+    );
+  }
+
   notify(
     offer.driver_id,
     'You were selected',
@@ -192,7 +210,7 @@ router.post('/bookings/:id/cancel', bookingBusiness, (req, res) => {
 
 router.get('/bookings/available', requireRole('worker'), (req, res) => {
   const list = (data().rideBookings || [])
-    .filter((b) => b.kind === 'business' && ['created', 'offers'].includes(b.status))
+    .filter((b) => isBookingRecord(b) && ['created', 'offers'].includes(b.status))
     .filter((b) => eligibleDriver(req.user, b))
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     .map((b) => bookingView(b, req.user));
@@ -203,7 +221,7 @@ router.get('/bookings/driver/mine', requireRole('worker'), (req, res) => {
   const list = (data().rideBookings || [])
     .filter(
       (b) =>
-        b.kind === 'business' &&
+        isBookingRecord(b) &&
         (b.selected_driver_id === req.user.id ||
           (b.offers || []).some((offer) => offer.driver_id === req.user.id))
     )
@@ -527,7 +545,7 @@ router.get('/admin/payments', requireRole('admin'), (req, res) => {
 
 router.get('/owner/platform', requireRole('owner'), (req, res) => {
   const db = data();
-  const bookings = (db.rideBookings || []).filter((b) => b.kind === 'business');
+  const bookings = (db.rideBookings || []).filter((b) => isBookingRecord(b));
   const paid = bookings.filter((b) => b.payment);
   const byCurrency = new Map();
   for (const booking of paid) {
