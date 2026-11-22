@@ -191,9 +191,23 @@ export function trackBookingView(ctx, token) {
           ${
             booking.selected_driver
               ? `<div class="card" style="margin-top:12px">
-                  <h3 style="margin-top:0">Selected driver</h3>
+                  <h3 style="margin-top:0">Your driver</h3>
+                  <p class="notice" style="margin:0 0 8px"><strong>Your driver is confirmed.</strong></p>
                   <p style="margin:0">${esc(booking.selected_driver.name)} · ${esc(booking.selected_driver.vehicle_name || '')}</p>
-                  <p class="muted" style="margin:4px 0 0">${booking.selected_driver.phone ? `Phone: ${esc(booking.selected_driver.phone)}` : 'Contact details unlock as soon as the driver accepts.'}</p>
+                  ${
+                    booking.selected_price
+                      ? `<p class="muted" style="margin:4px 0 0">Agreed price: ${esc(
+                          String(booking.selected_price)
+                        )} ${esc(booking.currency || '')}</p>`
+                      : ''
+                  }
+                  <p class="muted" style="margin:4px 0 0">${
+                    booking.selected_driver.phone
+                      ? `Phone: ${esc(booking.selected_driver.phone)}`
+                      : booking.contact_hidden
+                        ? "The driver's phone number was removed because this booking is completed. Your booking record, dates and price are kept."
+                        : "The driver's phone number appears here as soon as they accept."
+                  }</p>
                 </div>`
               : ''
           }
