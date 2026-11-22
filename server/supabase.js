@@ -28,7 +28,11 @@ const TABLE_BY_COLLECTION = {
   commissions: 'commissions',
   resetTokens: 'password_reset_tokens',
   auditLog: 'audit_log',
-  payments: 'payments'
+  payments: 'payments',
+  rideBookings: 'ride_bookings',
+  mallVehicles: 'mall_vehicles',
+  mallShops: 'mall_shops',
+  mallProducts: 'mall_products'
 };
 
 export const COLLECTION_TABLES = TABLE_BY_COLLECTION;

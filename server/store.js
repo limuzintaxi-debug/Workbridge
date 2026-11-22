@@ -40,7 +40,9 @@ export function defaultSettings() {
     },
     registration: { worker: 'auto', business: 'auto' },
     languages: { default: 'en', enabled: ['en', 'ar'] },
-    support: { email: config.supportEmail }
+    support: { email: config.supportEmail },
+    // Ride bookings go only to workers the admin explicitly enables.
+    rideBooking: { enabled: true }
   };
 }
 
@@ -166,7 +168,8 @@ function migrate(raw) {
     commission: { ...base.settings.commission, ...(raw.settings?.commission || {}) },
     registration: { ...base.settings.registration, ...(raw.settings?.registration || {}) },
     languages: { ...base.settings.languages, ...(raw.settings?.languages || {}) },
-    support: { ...base.settings.support, ...(raw.settings?.support || {}) }
+    support: { ...base.settings.support, ...(raw.settings?.support || {}) },
+    rideBooking: { ...base.settings.rideBooking, ...(raw.settings?.rideBooking || {}) }
   };
   for (const collection of COLLECTIONS) {
     if (!Array.isArray(merged[collection])) merged[collection] = [];

@@ -5,6 +5,7 @@ import { initStore } from './store.js';
 import { attachSession } from './middleware.js';
 import api from './routes.js';
 import accountRoutes from './routes-account.js';
+import featureRoutes from './routes-features.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -20,6 +21,7 @@ app.use((req, res, next) => {
 });
 
 app.use('/api', accountRoutes);
+app.use('/api', featureRoutes);
 app.use('/api', api);
 
 app.get('/api/health', (req, res) => {

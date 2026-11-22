@@ -88,7 +88,10 @@ export function requireRole(...roles) {
     if (!req.user) {
       return res.status(401).json({ error: 'unauthorized', message: 'Please sign in to continue.' });
     }
-    if (roles.length && !roles.includes(req.user.role)) {
+    // The platform owner is a superset of an admin: every admin route stays
+    // reachable while owner-only routes still require the owner role.
+    const effective = req.user.role === 'owner' ? ['owner', 'admin'] : [req.user.role];
+    if (roles.length && !roles.some((role) => effective.includes(role))) {
       return res
         .status(403)
         .json({ error: 'forbidden', message: 'Your account does not have access to this action.' });
