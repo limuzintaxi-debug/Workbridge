@@ -137,9 +137,16 @@ router.post('/auth/forgot-password', async (req, res) => {
     });
   } catch (error) {
     console.error('[workbridge] password reset email failed:', error.message);
-    // The provider's own reason is returned so the failure is actionable. This
-    // endpoint never reports success for a send that did not happen.
-    return fail(res, 502, error.code || 'email_failed', error.message);
+    // Answered as a normal JSON response, not a 5xx: an edge proxy replaces a
+    // 502 body with its own error page, which would hide the reason from the
+    // user. email_sent:false is explicit, and the real cause travels with it.
+    return res.json({
+      ...generic,
+      email_sent: false,
+      account_found: true,
+      delivery_error: error.code || 'email_failed',
+      message: `The reset email could not be delivered. ${error.message}`
+    });
   }
 
   return res.json({
