@@ -97,9 +97,11 @@ export async function resetPasswordView(ctx) {
             )}</strong>, so no email was sent. Enter the exact address you registered with, or create an account.</div>`;
             toast('No account uses that email', 'error');
           } else {
-            box.innerHTML = `<div class="notice">${esc(
+            const failed = Boolean(res.delivery_error);
+            box.innerHTML = `<div class="notice"${failed ? ' style="border-color:#c62828;color:#c62828"' : ''}>${esc(
               res.message || 'Check your inbox for the reset link.'
             )}</div>`;
+            toast(failed ? 'Reset email could not be delivered' : 'Check the message below', failed ? 'error' : 'info');
           }
           if (res.reset_url) {
             box.innerHTML += `<p class="sig-hint">Development helper — open your reset link: <a href="${esc(
