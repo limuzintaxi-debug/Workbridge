@@ -428,8 +428,15 @@ try {
     const businessContact = asDriver.json.booking.business;
     assert.ok(!businessContact || !businessContact.phone, 'contact must stay locked before acceptance');
 
+    // A driver who offered may track the booking, but the business contact
+    // stays locked until the selected driver accepts.
     const notSelected = await drivers[0].get(`/api/bookings/${bookingId}`);
-    assert.equal(notSelected.status, 403, 'a non-selected driver cannot open the booking');
+    assert.equal(notSelected.status, 200, notSelected.text);
+    const notSelectedBusiness = notSelected.json.booking.business;
+    assert.ok(
+      !notSelectedBusiness || !notSelectedBusiness.phone,
+      'a non-selected driver must not receive the business contact'
+    );
   });
 
   await step('the ride cannot skip stages and only the selected driver acts', async () => {
