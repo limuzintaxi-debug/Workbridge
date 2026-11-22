@@ -22,7 +22,8 @@ import {
   customerBookingView,
   nextBookingRef,
   newBookingId,
-  validOffers
+  validOffers,
+  openOffers
 } from './bookings.js';
 
 const router = Router();
@@ -362,7 +363,7 @@ router.post('/ride-bookings/track/:token/select', (req, res) => {
     return fail(res, 409, 'wrong_stage', 'A driver has already been selected for this booking.');
   }
   const offerId = str((req.body || {}).offer_id, 60);
-  const offer = validOffers(booking).find((o) => o.id === offerId);
+  const offer = openOffers(booking).find((o) => o.id === offerId);
   if (!offer) return fail(res, 404, 'offer_not_found', 'That offer is no longer available.');
 
   booking.selected_offer_id = offer.id;
@@ -372,9 +373,9 @@ router.post('/ride-bookings/track/:token/select', (req, res) => {
   pushEvent(booking, 'selected', { id: 'customer', role: 'customer' });
 
   // Close every other offer so only the chosen driver can act on the booking.
+  // They stay on the record so the history of who offered what is not lost.
   for (const other of booking.offers || []) {
-    if (other.id === offer.id || other.withdrawn) continue;
-    other.withdrawn = true;
+    if (other.id === offer.id || other.closed_reason) continue;
     other.closed_reason = 'assigned';
     other.closed_at = nowIso();
     data().notifications.unshift({
