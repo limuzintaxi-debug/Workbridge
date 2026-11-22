@@ -613,9 +613,15 @@ try {
       'offers must be ordered lowest price first'
     );
     assert.equal(
-      booking.offers[0].id,
-      booking.selected_offer_id || booking.offers[0].id,
-      'the cheapest offer is never auto-selected on the business behalf'
+      booking.selected_offer_id,
+      selectedOffer.id,
+      'the recorded selection is the driver the business chose, not the cheapest offer'
+    );
+    assert.ok(booking.selected_driver_id, 'a driver is assigned only after an explicit business selection');
+    assert.notEqual(
+      booking.offers[0].price,
+      selectedOffer.price,
+      'the test proves a non-cheapest offer can be selected'
     );
   });
 
