@@ -729,6 +729,14 @@ try {
     assert.equal(select.status, 200, select.text);
     assert.equal(select.json.booking.status, 'confirmed', 'selection confirms the booking');
 
+    // The chosen driver is notified at once — no acceptance step remains.
+    const notified = await drivers[selectedDriverIndex].get('/api/notifications');
+    assert.equal(notified.status, 200, notified.text);
+    assert.ok(
+      notified.text.includes('Your Booking Is Confirmed!'),
+      'the selected driver receives the booking confirmation notification'
+    );
+
     // "Pick Up Customer" → "Drop-off Customer" → "Order Completed"
     for (const [path, expected] of [
       ['pickup', 'pickup'],
