@@ -461,13 +461,9 @@ try {
     });
     assert.equal(earlyPayment.status, 409, earlyPayment.text);
 
-    // Pickup is the first driver action now that selection confirms the booking.
-    const pickup = await drivers[selectedDriverIndex].post(`/api/bookings/${bookingId}/pickup`, {});
-    assert.equal(pickup.status, 200, pickup.text);
-    assert.equal(pickup.json.booking.status, 'pickup');
-
-    const repeat = await drivers[selectedDriverIndex].post(`/api/bookings/${bookingId}/pickup`, {});
-    assert.equal(repeat.status, 409, 'pickup cannot be repeated');
+    // Drop-off cannot precede pickup either; pickup itself is exercised next.
+    const skipDropoff = await drivers[selectedDriverIndex].post(`/api/bookings/${bookingId}/dropoff`, {});
+    assert.equal(skipDropoff.status, 409, 'drop-off cannot precede pickup');
   });
 
   await step('selection already confirmed the booking and unlocked both contacts', async () => {
