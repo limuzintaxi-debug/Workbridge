@@ -713,7 +713,7 @@ try {
       vehicle_name: 'Toyota Fortuner',
       price: 275
     });
-    assert.equal(offer.status, 200, offer.text);
+    assert.equal(offer.status, 201, offer.text);
 
     const listed = await business.get('/api/bookings/mine');
     const second = listed.json.bookings.find((row) => row.id === secondId);
