@@ -17,7 +17,8 @@
     "test:bookings": "node scripts/bookings.test.js",
     "test:invoice": "node scripts/invoice-pdf.test.js",
     "test:final": "node scripts/session-reset.test.js",
-    "test:browser": "node scripts/browser.admin-commission.mjs"
+    "test:browser": "node scripts/browser.admin-commission.mjs",
+    "test:customer-booking": "node scripts/customer-booking.test.js"
   },
   "dependencies": {
     "express": "^5.3.0",
