@@ -65,6 +65,24 @@ function bookingBusiness(req, res, next) {
   next();
 }
 
+/**
+ * Payment for a business booking is recorded by that business. A public "Book
+ * Your Car" booking has no business account, so its chosen driver records the
+ * fare they received — that is what lets such a booking reach 'completed'.
+ */
+function bookingPayer(req, res, next) {
+  if (!req.user) return fail(res, 401, 'auth_required', 'Please sign in first.');
+  const booking = findBooking(req.params.id);
+  if (!booking) return fail(res, 404, 'not_found', 'Booking not found.');
+  const isBusinessOwner = req.user.role === 'business' && booking.business_id === req.user.id;
+  const isCustomerDriver =
+    booking.kind === 'customer' && booking.selected_driver_id === req.user.id;
+  if (!isBusinessOwner && !isCustomerDriver) {
+    return fail(res, 403, 'forbidden', 'You cannot record payment for this booking.');
+  }
+  next();
+}
+
 function validDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
@@ -366,12 +384,9 @@ for (const [path, rule] of Object.entries(STAGE_ACTION)) {
  * taken from the owner's current setting, and the remainder is what the driver
  * receives. The booking only reaches 'completed' after payment exists.
  */
-router.post('/bookings/:id/payment', bookingBusiness, (req, res) => {
+router.post('/bookings/:id/payment', bookingPayer, (req, res) => {
   const booking = findBooking(req.params.id);
   if (!booking) return fail(res, 404, 'not_found', 'Booking not found.');
-  if (booking.business_id !== req.user.id) {
-    return fail(res, 403, 'forbidden', 'This booking belongs to another business.');
-  }
   if (booking.status !== 'complete_order') {
     return fail(res, 409, 'wrong_stage', 'Pickup, drop-off and order completion must be finished before payment.');
   }
