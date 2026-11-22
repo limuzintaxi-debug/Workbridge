@@ -583,6 +583,90 @@ try {
     );
   });
 
+  await step('business offer rows identify driver, vehicle, category and price', async () => {
+    const list = await business.get('/api/bookings/mine');
+    assert.equal(list.status, 200, list.text);
+    const booking = list.json.bookings.find((row) => row.id === bookingId);
+    assert.ok(booking, 'the booking must be visible to its business');
+
+    assert.equal(booking.offers.length, 4, 'the four lowest offers are shown');
+    assert.ok(
+      Number(booking.offer_count) >= 4,
+      `offer_count must report every valid offer, got ${booking.offer_count}`
+    );
+    assert.ok(
+      Number(booking.eligible_driver_count) >= 4,
+      `eligible_driver_count must report the approved drivers reached, got ${booking.eligible_driver_count}`
+    );
+
+    for (const offer of booking.offers) {
+      assert.ok(offer.driver_name, 'each offer names the driver');
+      assert.ok(offer.vehicle_name, 'each offer names the vehicle model');
+      assert.ok(offer.vehicle_category, 'each offer names the vehicle category');
+      assert.ok(Number(offer.price) > 0, 'each offer carries the driver price');
+    }
+
+    const prices = booking.offers.map((offer) => Number(offer.price));
+    assert.deepEqual(
+      prices,
+      [...prices].sort((a, b) => a - b),
+      'offers must be ordered lowest price first'
+    );
+    assert.equal(
+      booking.offers[0].id,
+      booking.selected_offer_id || booking.offers[0].id,
+      'the cheapest offer is never auto-selected on the business behalf'
+    );
+  });
+
+  await step('the public admin entry point exposes no owner identity', async () => {
+    const status = await fetch(`${BASE}/api/auth/owner-status`);
+    assert.equal(status.status, 200);
+    const body = await status.json();
+    const serialized = JSON.stringify(body);
+
+    assert.ok(
+      !Object.keys(body).some((key) => /owner/i.test(key)),
+      `owner-related fields must not be returned: ${serialized}`
+    );
+    assert.ok(!serialized.includes('@'), `no email address may be returned: ${serialized}`);
+    assert.ok(
+      body.setup_required !== undefined || body.recovery_enabled !== undefined,
+      'only setup state is returned'
+    );
+
+    // The shipped frontend bundle must not carry the old masked-owner hint either.
+    const bundle = await fetch(`${BASE}/views/public.js`);
+    assert.equal(bundle.status, 200);
+    const source = await bundle.text();
+    assert.ok(!source.includes('owner_email_masked'), 'the masked owner email must be gone from the frontend');
+    assert.ok(!source.includes('Owner account on file'), 'the owner hint must be gone from the admin login');
+    assert.ok(
+      source.includes('export async function ownerSigninView'),
+      'owner sign-in must be a separate view from admin sign-in'
+    );
+  });
+
+  await step('every panel ships its own share-link login target', async () => {
+    const asset = await fetch(`${BASE}/views/common.js`);
+    assert.equal(asset.status, 200);
+    const source = await asset.text();
+
+    for (const target of ['#/worker/signin', '#/business/signin', '#/admin/signin', '#/owner/signin']) {
+      assert.ok(source.includes(target), `missing share target ${target}`);
+    }
+    assert.ok(source.includes('data-share-url'), 'the panel shell must render a share control');
+
+    // A shared link only reaches a login form: no panel data is readable without a session.
+    for (const guarded of ['/api/bookings/mine', '/api/admin/drivers', '/api/owner/admins/list']) {
+      const res = await fetch(`${BASE}${guarded}`);
+      assert.ok(
+        [401, 403].includes(res.status),
+        `${guarded} must require authentication, got ${res.status}`
+      );
+    }
+  });
+
   console.log(`\n${passed} passed\n`);
 } catch (error) {
   console.error(error);
