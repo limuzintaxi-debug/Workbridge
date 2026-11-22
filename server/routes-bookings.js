@@ -197,10 +197,14 @@ router.post('/bookings/:id/select', bookingBusiness, (req, res) => {
     );
   }
 
+  // Selecting a driver confirms the booking immediately: the chosen driver is
+  // assigned and notified right away, with no separate acceptance step.
+  pushEvent(booking, 'confirmed', req.user);
   notify(
     offer.driver_id,
-    'You were selected',
-    `${booking.ref}: ${booking.pickup} → ${booking.destination}. Accept to confirm.`,
+    'Your Booking Is Confirmed!',
+    `${booking.ref}: ${booking.pickup} → ${booking.destination} on ${booking.date} at ${booking.time}` +
+      ` · ${booking.selected_price} ${booking.currency}${booking.selected_vehicle ? ` · ${booking.selected_vehicle}` : ''}`,
     '#/worker/bookings'
   );
 
@@ -337,6 +341,11 @@ router.post('/bookings/:id/accept', requireRole('worker'), (req, res) => {
   if (booking.selected_driver_id !== req.user.id) {
     return fail(res, 403, 'not_selected', 'You were not selected for this booking.');
   }
+  // Selection now confirms the booking, so acceptance stays idempotent for any
+  // client or record that still sends it.
+  if (booking.status === 'confirmed') {
+    return res.json({ booking: bookingView(booking, req.user) });
+  }
   if (booking.status !== 'selected') {
     return fail(res, 409, 'wrong_stage', 'This booking is not waiting for your acceptance.');
   }
@@ -352,7 +361,12 @@ router.post('/bookings/:id/accept', requireRole('worker'), (req, res) => {
 });
 
 const STAGE_ACTION = {
-  pickup: { from: 'confirmed', to: 'pickup', error: 'Confirm the booking before pickup.' },
+  pickup: {
+    from: 'confirmed',
+    froms: ['confirmed', 'selected'],
+    to: 'pickup',
+    error: 'Confirm the booking before pickup.'
+  },
   dropoff: { from: 'pickup', to: 'dropoff', error: 'Confirm pickup before drop-off.' },
   'complete-order': { from: 'dropoff', to: 'complete_order', error: 'Confirm drop-off before completing the order.' }
 };
@@ -364,7 +378,8 @@ for (const [path, rule] of Object.entries(STAGE_ACTION)) {
     if (booking.selected_driver_id !== req.user.id) {
       return fail(res, 403, 'not_selected', 'You are not the assigned driver.');
     }
-    if (booking.status !== rule.from) {
+    const allowedFrom = rule.froms || [rule.from];
+    if (!allowedFrom.includes(booking.status)) {
       return fail(res, 409, 'wrong_stage', rule.error);
     }
     pushEvent(booking, rule.to, req.user);

@@ -338,9 +338,12 @@ export async function businessBookingsView(ctx) {
 
 /* ------------------------------------------------------------------- driver */
 
-/** The six driver actions, in the only order the server accepts them. */
+/**
+ * The five driver actions, in the only order the server accepts them. Choosing
+ * a driver confirms the booking, so the first action is pickup — there is no
+ * separate acceptance step.
+ */
 const DRIVER_ACTIONS = [
-  { key: 'accept', label: 'Accept Booking', from: 'selected' },
   { key: 'pickup', label: 'Pick Up Customer', from: 'confirmed' },
   { key: 'dropoff', label: 'Drop-off Customer', from: 'pickup' },
   { key: 'complete-order', label: 'Order Completed', from: 'dropoff' },
@@ -360,7 +363,9 @@ function driverStageActions(booking) {
     return '<p class="muted" style="margin:0">This booking was cancelled.</p>';
   }
   if (booking.status === 'completed') return '<span class="tag">Booking completed</span>';
-  const current = DRIVER_ACTIONS.findIndex((action) => action.from === booking.status);
+  // Records saved before selection auto-confirmed are treated as confirmed.
+  const stage = booking.status === 'selected' ? 'confirmed' : booking.status;
+  const current = DRIVER_ACTIONS.findIndex((action) => action.from === stage);
   return `<div class="btn-row driver-actions">${DRIVER_ACTIONS.map((action, index) => {
     if (current > -1 && index < current) {
       return `<span class="tag tag-done">✓ ${esc(action.label)}</span>`;
@@ -391,10 +396,12 @@ function driverCard(booking) {
     )}</div></header>
     ${
       confirmed
-        ? `<div class="notice"><strong>Your Booking Is Confirmed.</strong>
-            <div>${esc(booking.customer_name || 'The customer')} chose you for ${esc(
-            booking.vehicle_category
-          )} on ${esc(booking.date)} ${esc(booking.time)}.</div></div>`
+        ? `<div class="notice"><strong>Your Booking Is Confirmed!</strong>
+            <div>${esc(booking.customer_name || 'The customer')} chose you${
+            booking.selected_vehicle ? ` — ${esc(booking.selected_vehicle)}` : ''
+          } for ${esc(booking.vehicle_category)} on ${esc(booking.date)} at ${esc(
+            booking.time
+          )}. This booking is assigned to you.</div></div>`
         : ''
     }
     <ul class="money-list">
@@ -402,6 +409,11 @@ function driverCard(booking) {
       <li><span>Destination</span><b>${esc(booking.destination)}</b></li>
       <li><span>Date &amp; time</span><b>${esc(booking.date)} · ${esc(booking.time)}</b></li>
       <li><span>Vehicle category</span><b>${esc(booking.vehicle_category)}</b></li>
+      ${
+        booking.selected_vehicle
+          ? `<li><span>Vehicle name</span><b>${esc(booking.selected_vehicle)}</b></li>`
+          : ''
+      }
       ${
         booking.selected_price
           ? `<li><span>Agreed price</span><b>${amount(booking.selected_price, booking.currency)}</b></li>`
@@ -470,7 +482,7 @@ export async function driverBookingsView(ctx) {
       subtitle: 'Offer your price on open requests and manage your assigned rides.',
       tabs,
       path: '/worker/bookings',
-      body: `${stageStrip()}<h2>Open booking requests</h2>${availableHtml}
+      body: `<h2>Open booking requests</h2>${availableHtml}
         <h2 style="margin-top:24px">My bookings</h2>${mineHtml}`
     }),
     mount: () => {
