@@ -168,6 +168,8 @@ async function route(path, parts, query) {
   if (path === '/reset-password') return account.resetPasswordView(ctx);
   if (path === '/setup') return account.setupView(ctx);
   if (path === '/book-car') return ride.bookCarView(ctx);
+  // Private customer tracking link: compare offers and choose a driver.
+  if (parts[0] === 'track' && parts[1]) return ride.trackBookingView(ctx, parts[1]);
   if (path === '/mall') return mall.mallView(ctx);
   if (path === '/admin-apply') return owner.applyView(ctx);
   // Dedicated administrator entry points. They must resolve before the generic
