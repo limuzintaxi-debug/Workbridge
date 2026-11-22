@@ -7,10 +7,13 @@ import * as business from './views/business.js';
 import * as admin from './views/admin.js';
 import * as docs from './views/docs.js';
 import * as account from './views/account.js';
+import * as ride from './views/ride.js';
+import * as mall from './views/mall.js';
+import * as owner from './views/owner.js';
 
 const state = { user: null, meta: null };
 
-const PANEL_HOME = { worker: '#/worker', business: '#/business', admin: '#/admin' };
+const PANEL_HOME = { worker: '#/worker', business: '#/business', admin: '#/admin', owner: '#/owner' };
 
 const NAV = {
   worker: [
@@ -20,6 +23,7 @@ const NAV = {
     ['#/worker/agreements', 'nav.agreements'],
     ['#/worker/invoices', 'nav.invoices'],
     ['#/worker/notifications', 'nav.alerts'],
+    ['#/worker/ride-bookings', 'Ride Booking'],
     ['#/worker/profile', 'nav.profile']
   ],
   business: [
@@ -30,6 +34,7 @@ const NAV = {
     ['#/business/applications', 'nav.applications'],
     ['#/business/agreements', 'nav.agreements'],
     ['#/business/invoices', 'nav.invoices'],
+    ['#/mall', 'Mall'],
     ['#/business/profile', 'nav.profile']
   ],
   admin: [
@@ -39,14 +44,23 @@ const NAV = {
     ['#/admin/listings', 'nav.listings'],
     ['#/admin/documents', 'nav.documents'],
     ['#/admin/commission', 'nav.commission'],
+    ['#/admin/ride-booking', 'Ride Booking'],
+    ['#/admin/mall', 'Mall'],
     ['#/admin/reports', 'nav.reports'],
     ['#/admin/settings', 'nav.settings']
+  ],
+  owner: [
+    ['#/owner', 'Applications'],
+    ['#/owner/admins', 'Admins'],
+    ['#/admin', 'Primary Admin']
   ]
 };
 
 const PUBLIC_NAV = [
   ['#/worker/signin', 'nav.findWork'],
   ['#/business/signin', 'nav.postWork'],
+  ['#/book-car', 'Book Your Car'],
+  ['#/mall', 'Mall'],
   ['#/institutions', 'nav.institutions'],
   ['#/support', 'nav.help']
 ];
@@ -115,7 +129,9 @@ function guard(role, ctx) {
   if (!state.user) {
     return { redirect: role === 'admin' ? '#/admin/signin' : `#/${role}/signin` };
   }
-  if (state.user.role !== role) {
+  const allowed =
+    state.user.role === role || (role === 'admin' && state.user.role === 'owner');
+  if (!allowed) {
     return { redirect: PANEL_HOME[state.user.role] || '#/' };
   }
   return null;
@@ -123,7 +139,9 @@ function guard(role, ctx) {
 
 function guardAny(roles, ctx) {
   if (!state.user) return { redirect: '#/' };
-  if (!roles.includes(state.user.role)) return { redirect: PANEL_HOME[state.user.role] || '#/' };
+  const allowed =
+    roles.includes(state.user.role) || (state.user.role === 'owner' && roles.includes('admin'));
+  if (!allowed) return { redirect: PANEL_HOME[state.user.role] || '#/' };
   return null;
 }
 
@@ -135,6 +153,10 @@ async function route(path, parts, query) {
   if (path === '/institutions') return pub.institutionsView(ctx);
   if (path === '/reset-password') return account.resetPasswordView(ctx);
   if (path === '/setup') return account.setupView(ctx);
+  if (path === '/book-car') return ride.bookCarView(ctx);
+  if (path === '/mall') return mall.mallView(ctx);
+  if (path === '/admin-apply') return owner.applyView(ctx);
+  if (path === '/worker/ride-bookings') return guard('worker', ctx) || ride.workerRideView(ctx);
 
   const authMatch = path.match(/^\/(worker|business|admin)\/(signin|signup)$/);
   if (authMatch) {
@@ -144,6 +166,7 @@ async function route(path, parts, query) {
   if (parts[0] === 'worker') return guard('worker', ctx) || worker.view(ctx);
   if (parts[0] === 'business') return guard('business', ctx) || business.view(ctx);
   if (parts[0] === 'admin') return guard('admin', ctx) || admin.view(ctx);
+  if (parts[0] === 'owner') return guard('owner', ctx) || owner.view(ctx);
   if (path === '/account') {
     return guardAny(['worker', 'business', 'admin'], ctx) || account.accountView(ctx);
   }

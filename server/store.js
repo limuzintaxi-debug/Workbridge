@@ -174,24 +174,44 @@ function migrate(raw) {
   for (const collection of COLLECTIONS) {
     if (!Array.isArray(merged[collection])) merged[collection] = [];
   }
+  // Existing installations: the administrator that is already in place becomes
+  // the platform owner, so no second account has to be created.
+  const users = merged.users;
+  if (!users.some((u) => u.role === 'owner')) {
+    const legacy = users.find((u) => u.role === 'admin');
+    if (legacy) {
+      legacy.role = 'owner';
+      legacy.admin_scope = { level: 'global', country: '', city: '' };
+    }
+  }
+  for (const user of users) {
+    if (user.role === 'admin' && !user.admin_scope) {
+      user.admin_scope = { level: 'global', country: '', city: '' };
+    }
+  }
   return merged;
 }
 
 /* ------------------------------------------------------------------ admin */
 
 export function adminExists() {
-  return data().users.some((u) => u.role === 'admin');
+  return data().users.some((u) => u.role === 'admin' || u.role === 'owner');
 }
 
 export function createAdmin({ email, password, fullName, phone = '' }) {
+  // The first administrator of an installation is the platform owner; every
+  // later one is a regular (global) admin until the owner scopes them.
+  const role = data().users.some((u) => u.role === 'owner') ? 'admin' : 'owner';
   const user = {
     id: crypto.randomUUID(),
-    role: 'admin',
+    role,
     email: String(email).trim().toLowerCase(),
     password_hash: hashPassword(password),
     full_name: String(fullName || 'WORKBRIDGE Administrator').trim(),
     phone: String(phone || '').trim(),
     status: 'active',
+    admin_scope: { level: 'global', country: '', city: '' },
+    session_epoch: 0,
     created_at: nowIso()
   };
   data().users.push(user);

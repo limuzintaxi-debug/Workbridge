@@ -44,6 +44,18 @@ export async function homeView(ctx) {
 
   <div class="container" style="padding-bottom:0">
     <div class="grid grid-2">
+      <div class="card">
+        <h3>BOOK YOUR CAR</h3>
+        <p class="muted">Small Car, Go, Business or VIP — send a booking in one simple step.</p>
+        <a class="btn btn-navy btn-sm" href="#/book-car">Book your car</a>
+      </div>
+      <div class="card">
+        <h3>WORKBRIDGE MALL</h3>
+        <p class="muted">Vehicles to buy &amp; sell, and electronic shops with discount products.</p>
+        <a class="btn btn-ghost btn-sm" href="#/mall">Open the Mall</a>
+      </div>
+    </div>
+    <div class="grid grid-2">
       ${institutionsCard(institutions)}
       <div class="card">
         <h3>Institutional &amp; Social Support</h3>
@@ -57,7 +69,7 @@ export async function homeView(ctx) {
         <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>.</p>
       <a class="btn btn-ghost btn-sm" href="#/support">Open Help &amp; Support</a>
     </div>
-    <p class="admin-entry"><a href="#/admin/signin">Admin Login</a></p>
+    <p class="admin-entry"><a href="#/admin/signin">Admin Login</a> · <a href="#/admin-apply">Apply for admin access</a></p>
     <p class="hero-panels-note">Protected by role-based access — institutional contact details are never published.</p>
   </div>`;
 
