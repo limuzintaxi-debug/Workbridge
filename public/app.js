@@ -1,16 +1,16 @@
-import { api } from './api.js';
-import { esc, setDefaultCurrency } from './ui.js';
-import { t, initLang, langSwitcher, bindLangSwitcher } from './i18n.js';
-import * as pub from './views/public.js';
-import * as worker from './views/worker.js';
-import * as business from './views/business.js';
-import * as admin from './views/admin.js';
-import * as docs from './views/docs.js';
-import * as account from './views/account.js';
-import * as ride from './views/ride.js';
-import * as mall from './views/mall.js';
-import * as owner from './views/owner.js';
-import { openAgreementView } from './views/agreement-open.js';
+import { api } from './api.js?v=22';
+import { esc, setDefaultCurrency } from './ui.js?v=22';
+import { t, initLang, langSwitcher, bindLangSwitcher } from './i18n.js?v=22';
+import * as pub from './views/public.js?v=22';
+import * as worker from './views/worker.js?v=22';
+import * as business from './views/business.js?v=22';
+import * as admin from './views/admin.js?v=22';
+import * as docs from './views/docs.js?v=22';
+import * as account from './views/account.js?v=22';
+import * as ride from './views/ride.js?v=22';
+import * as mall from './views/mall.js?v=22';
+import * as owner from './views/owner.js?v=22';
+import { openAgreementView } from './views/agreement-open.js?v=22';
 
 const state = { user: null, meta: null };
 
@@ -331,7 +331,22 @@ window.addEventListener('DOMContentLoaded', async () => {
 });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  // A returning visitor can still be controlled by an older worker. updateViaCache
+  // keeps sw.js itself out of the HTTP cache, reg.update() forces the check, and
+  // the single reload on controllerchange swaps the page onto the new build.
+  const hadController = Boolean(navigator.serviceWorker.controller);
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloading) return;
+    reloading = true;
+    location.reload();
+  });
+  window.addEventListener('load', async () => {
+    try {
+      const registration = await navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' });
+      await registration.update().catch(() => {});
+    } catch {
+      /* offline or unsupported: the app still works without a worker */
+    }
   });
 }
