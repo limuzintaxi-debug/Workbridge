@@ -151,7 +151,7 @@ function tokenFrom(mail) {
 
 const stamp = Date.now().toString().slice(-6);
 const accounts = {
-  admin: { email: `admin${stamp}@workbridge.test`, password: 'AdminPass#2024', role: 'admin' },
+  admin: { email: `admin${stamp}@workbridge.test`, password: 'AdminPass#2024', role: 'owner' },
   worker: { email: `worker${stamp}@workbridge.test`, password: 'WorkerPass#2024', role: 'worker' },
   business: { email: `business${stamp}@workbridge.test`, password: 'BizPass#2024', role: 'business' }
 };
@@ -191,7 +191,7 @@ try {
       full_name: 'Reset Test Admin'
     });
     assert.equal(res.status, 201, res.text);
-    assert.equal(res.json.user.role, 'admin');
+    assert.equal(res.json.user.role, 'owner');
   });
 
   await step('registration is set to automatic so accounts are active', async () => {
