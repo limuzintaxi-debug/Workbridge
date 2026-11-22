@@ -76,8 +76,10 @@ export function eligibleDriver(user, booking) {
   const bookCity = String(booking.city || '').trim().toLowerCase();
   const driverCountry = String(profile.country || '').trim().toLowerCase();
   const driverCity = String(profile.city || '').trim().toLowerCase();
-  if (bookCountry && driverCountry !== bookCountry) return false;
-  if (bookCity && driverCity !== bookCity) return false;
+  // Region matching only excludes a driver whose region is known to differ, so
+  // a driver who has not set a country/city yet is not silently cut off.
+  if (bookCountry && driverCountry && driverCountry !== bookCountry) return false;
+  if (bookCity && driverCity && driverCity !== bookCity) return false;
   return true;
 }
 
