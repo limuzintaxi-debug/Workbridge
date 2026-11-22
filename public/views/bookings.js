@@ -56,20 +56,40 @@ function progress(status) {
   }).join('')}</ol>`;
 }
 
-/** Contact details only exist in the payload once the driver has accepted. */
-function contactOf(booking) {
-  const party = booking.driver || booking.business || null;
+/**
+ * One contact card. The server only sends these fields while the booking is
+ * active, so an empty party simply renders nothing.
+ */
+function contactBox(label, party) {
   if (!party) return '';
   const name = party.company_name || party.contact_name || party.name || '';
   const phone = party.phone || '';
   const whatsapp = party.whatsapp || phone;
-  if (!phone) return '';
+  if (!name && !phone) return '';
   const digits = String(whatsapp).replace(/[^\d]/g, '');
   return `<div class="contact-box">
-    <strong>${esc(name)}</strong>
-    <div><a href="tel:${esc(phone)}">${esc(phone)}</a></div>
+    <span class="tag">${esc(label)}</span>
+    ${name ? `<strong>${esc(name)}</strong>` : ''}
+    ${phone ? `<div><a href="tel:${esc(phone)}">${esc(phone)}</a></div>` : ''}
     ${digits ? `<div><a href="https://wa.me/${esc(digits)}" target="_blank" rel="noopener">WhatsApp</a></div>` : ''}
   </div>`;
+}
+
+/**
+ * Contact details are shared between the two parties from the moment the driver
+ * is chosen, and withdrawn by the server once the booking is completed. The
+ * record itself (dates, prices, payment, history) is never removed.
+ */
+function contactOf(booking, omit) {
+  const blocks = [
+    omit === 'customer' ? '' : contactBox('Customer', booking.customer),
+    omit === 'driver' ? '' : contactBox('Driver', booking.driver),
+    omit === 'business' ? '' : contactBox('Business', booking.business)
+  ].join('');
+  const note = booking.contact_hidden
+    ? `<p class="muted">Contact numbers were removed because this booking is completed. The booking record, dates, prices and payment details are kept.</p>`
+    : '';
+  return blocks || note ? `<div class="contact-wrap">${blocks}${note}</div>` : '';
 }
 
 function offersOf(booking) {
@@ -180,10 +200,10 @@ function businessCard(booking) {
     ${['created', 'offers'].includes(booking.status) ? offersTable(booking) : ''}
     ${
       booking.status === 'selected'
-        ? `<p class="notice">Waiting for the selected driver to accept. Contact details appear after acceptance.</p>`
+        ? `<p class="notice">Driver selected — waiting for them to accept. Contact details are available below.</p>`
         : ''
     }
-    ${contactOf(booking)}
+    ${contactOf(booking, 'business')}
     ${progress(booking.status)}
     ${paymentBlock(booking)}
     ${
@@ -329,9 +349,56 @@ function driverStageActions(booking) {
     return `<button class="btn btn-navy btn-sm" data-stage="complete-order" data-booking="${id}">Complete order</button>`;
   }
   if (booking.status === 'complete_order') {
-    return `<span class="tag">Waiting for the business to record payment</span>`;
+    return booking.kind === 'customer'
+      ? '<span class="tag">Record the fare you received below</span>'
+      : '<span class="tag">Waiting for the business to record payment</span>';
   }
   return '';
+}
+
+/** The driver's own card: confirmed banner plus every detail of the ride. */
+const CONFIRMED_STATES = [
+  'selected',
+  'confirmed',
+  'pickup',
+  'dropoff',
+  'complete_order',
+  'paid',
+  'completed'
+];
+
+function driverCard(booking) {
+  const confirmed = CONFIRMED_STATES.includes(booking.status);
+  return `<article class="card booking-card">
+    <header class="booking-head"><div><h3>${route(booking)}</h3>${meta(booking)}</div><div>${badge(
+      booking.status
+    )}</div></header>
+    ${
+      confirmed
+        ? `<div class="notice"><strong>Your Booking Is Confirmed.</strong>
+            <div>${esc(booking.customer_name || 'The customer')} chose you for ${esc(
+            booking.vehicle_category
+          )} on ${esc(booking.date)} ${esc(booking.time)}.</div></div>`
+        : ''
+    }
+    <ul class="money-list">
+      <li><span>Pickup</span><b>${esc(booking.pickup)}</b></li>
+      <li><span>Destination</span><b>${esc(booking.destination)}</b></li>
+      <li><span>Date &amp; time</span><b>${esc(booking.date)} · ${esc(booking.time)}</b></li>
+      <li><span>Vehicle category</span><b>${esc(booking.vehicle_category)}</b></li>
+      ${
+        booking.selected_price
+          ? `<li><span>Agreed price</span><b>${amount(booking.selected_price, booking.currency)}</b></li>`
+          : ''
+      }
+    </ul>
+    ${booking.details ? `<p class="muted">${esc(booking.details)}</p>` : ''}
+    ${booking.requirements ? `<p class="muted">Requirements: ${esc(booking.requirements)}</p>` : ''}
+    ${contactOf(booking, 'driver')}
+    ${progress(booking.status)}
+    <div class="btn-row">${driverStageActions(booking)}</div>
+    ${booking.kind === 'customer' ? paymentBlock(booking) : ''}
+  </article>`;
 }
 
 function offerForm(booking) {
@@ -380,19 +447,7 @@ export async function driverBookingsView(ctx) {
     : '<div class="empty">No open bookings for your approved categories right now.</div>';
 
   const mineHtml = mine.bookings.length
-    ? mine.bookings
-        .map(
-          (booking) => `<article class="card booking-card">
-            <header class="booking-head"><div><h3>${route(booking)}</h3>${meta(booking)}</div><div>${badge(
-              booking.status
-            )}</div></header>
-            ${booking.selected_price ? `<p><b>Agreed price:</b> ${amount(booking.selected_price, booking.currency)}</p>` : ''}
-            ${contactOf(booking)}
-            ${progress(booking.status)}
-            <div class="btn-row">${driverStageActions(booking)}</div>
-          </article>`
-        )
-        .join('')
+    ? mine.bookings.map((booking) => driverCard(booking)).join('')
     : '<div class="empty">You have no bookings yet.</div>';
 
   return {
