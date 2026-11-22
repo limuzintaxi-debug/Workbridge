@@ -25,7 +25,8 @@ import {
   pushEvent,
   roundMoney,
   scopedBookings,
-  validOffers
+  validOffers,
+  openOffers
 } from './bookings.js';
 
 const router = Router();
@@ -155,7 +156,7 @@ router.post('/bookings/:id/select', bookingBusiness, (req, res) => {
     return fail(res, 409, 'wrong_stage', 'A driver has already been selected for this booking.');
   }
   const offerId = str((req.body || {}).offer_id, 60);
-  const offer = validOffers(booking).find((o) => o.id === offerId);
+  const offer = openOffers(booking).find((o) => o.id === offerId);
   if (!offer) return fail(res, 404, 'offer_not_found', 'That offer is no longer available.');
 
   booking.selected_offer_id = offer.id;
@@ -165,9 +166,9 @@ router.post('/bookings/:id/select', bookingBusiness, (req, res) => {
   pushEvent(booking, 'selected', req.user);
 
   // Every other offer is closed, so only the selected driver can still act.
+  // Closed offers stay on the record for the business's comparison history.
   for (const other of booking.offers || []) {
-    if (other.id === offer.id || other.withdrawn) continue;
-    other.withdrawn = true;
+    if (other.id === offer.id || other.closed_reason) continue;
     other.closed_reason = 'assigned';
     other.closed_at = nowIso();
     notify(
@@ -223,7 +224,9 @@ router.get('/bookings/driver/mine', requireRole('worker'), (req, res) => {
       (b) =>
         isBookingRecord(b) &&
         (b.selected_driver_id === req.user.id ||
-          (b.offers || []).some((offer) => offer.driver_id === req.user.id))
+          (b.offers || []).some(
+            (offer) => offer.driver_id === req.user.id && !offer.closed_reason
+          ))
     )
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     .map((b) => bookingView(b, req.user));
@@ -243,7 +246,9 @@ router.get('/bookings/:id', (req, res) => {
   const allowed =
     viewer.id === booking.business_id ||
     viewer.id === booking.selected_driver_id ||
-    (booking.offers || []).some((offer) => offer.driver_id === viewer.id) ||
+    (booking.offers || []).some(
+      (offer) => offer.driver_id === viewer.id && !offer.closed_reason
+    ) ||
     viewer.role === 'admin' ||
     viewer.role === 'owner';
   if (!allowed) return fail(res, 403, 'forbidden', 'This booking is not available to you.');
