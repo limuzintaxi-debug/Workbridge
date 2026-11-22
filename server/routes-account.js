@@ -443,4 +443,86 @@ router.get('/documents/link', requireRole('worker', 'business', 'admin'), async 
   res.json({ url });
 });
 
+/* ------------------------------------------------- owner admin recovery */
+
+const maskEmail = (value) => {
+  const email = String(value || '');
+  const at = email.indexOf('@');
+  if (at < 1) return '';
+  return `${email.slice(0, 2)}***${email.slice(at)}`;
+};
+
+/**
+ * Public, read-only description of the administrator identity. It never returns
+ * a full administrator address, only a masked hint, so the login screen can tell
+ * the owner whether an account exists without leaking it to visitors.
+ */
+router.get('/auth/owner-status', (req, res) => {
+  const users = data().users || [];
+  const owner = users.find((u) => u.role === 'owner');
+  const admins = users.filter((u) => u.role === 'admin');
+  res.json({
+    owner_exists: Boolean(owner),
+    admin_count: admins.length,
+    owner_email_masked: maskEmail(owner && owner.email),
+    setup_required: !owner && admins.length === 0,
+    recovery_enabled: Boolean(config.setupToken)
+  });
+});
+
+/**
+ * Owner/Primary Admin password recovery that does not depend on email delivery.
+ *
+ * The owner identity is the only account allowed to approve administrators, so
+ * losing its password must not require a working mailbox. The reset is gated by
+ * the SETUP_TOKEN value from the server environment: when that value is absent
+ * the endpoint refuses to run rather than exposing an open password reset.
+ */
+router.post('/auth/owner-recover', (req, res) => {
+  const expected = String(config.setupToken || '').trim();
+  if (!expected) {
+    return fail(
+      res,
+      503,
+      'recovery_not_configured',
+      'Owner recovery is disabled because SETUP_TOKEN is not configured on the server.'
+    );
+  }
+  const body = req.body || {};
+  const provided = String(body.setup_token || '').trim();
+  const matches =
+    provided.length === expected.length &&
+    crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
+  if (!matches) {
+    return fail(res, 403, 'invalid_setup_token', 'The owner recovery token is not correct.');
+  }
+
+  const email = str(body.email, 160).toLowerCase();
+  const password = String(body.password || '');
+  if (!isEmail(email)) return fail(res, 400, 'invalid_email', 'Enter the administrator email address.');
+  if (password.length < 10) {
+    return fail(res, 400, 'weak_password', 'Use a password of at least 10 characters.');
+  }
+
+  const user = (data().users || []).find(
+    (u) => String(u.email || '').toLowerCase() === email && (u.role === 'owner' || u.role === 'admin')
+  );
+  if (!user) {
+    return fail(res, 404, 'not_found', 'No administrator account uses that email address.');
+  }
+
+  user.password_hash = hashPassword(password);
+  user.status = 'active';
+  user.recovered_at = nowIso();
+  user.session_epoch = Number(user.session_epoch || 0) + 1;
+  audit(user.id, 'auth.owner_password_recovered', user.email);
+  persist();
+  res.json({
+    ok: true,
+    role: user.role,
+    email: user.email,
+    message: 'Administrator password updated. Sign in with the new password.'
+  });
+});
+
 export default router;
