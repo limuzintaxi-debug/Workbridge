@@ -1,6 +1,7 @@
 import { api } from '../api.js';
 import { esc, toast, busy, formObject, pill, money, fmtDate, fmtDateTime, empty, ageBadge } from '../ui.js';
 import { panelShell, options, statCards, invoiceList } from './common.js';
+import { rideBookingAdmin, mallAdmin } from './admin-extras.js';
 
 const TABS = [
   ['#/admin', 'Overview'],
@@ -9,6 +10,8 @@ const TABS = [
   ['#/admin/listings', 'Listings'],
   ['#/admin/documents', 'Agreements & Invoices'],
   ['#/admin/commission', 'Commission'],
+  ['#/admin/ride-booking', 'Ride Booking'],
+  ['#/admin/mall', 'Mall'],
   ['#/admin/reports', 'Reports'],
   ['#/admin/settings', 'Settings']
 ];
@@ -618,6 +621,8 @@ export async function view(ctx) {
   if (section === 'listings') return listings(ctx);
   if (section === 'documents') return documents(ctx);
   if (section === 'commission') return commissionView(ctx);
+  if (section === 'ride-booking') return rideBookingAdmin(ctx, shell);
+  if (section === 'mall') return mallAdmin(ctx, shell);
   if (section === 'reports') return reports(ctx);
   if (section === 'settings') return settings(ctx);
   return { title: 'Not found', html: shell('/admin', 'Not found', '', empty('That page does not exist.')) };
