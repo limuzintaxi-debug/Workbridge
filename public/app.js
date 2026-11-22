@@ -174,6 +174,9 @@ async function route(path, parts, query) {
   // /(worker|business|admin)/(signin|signup) matcher so an admin never sees the
   // public sign-in/sign-up template.
   if (path === '/admin/signin') return pub.adminSigninView(ctx);
+  // Private owner entry point, routed before the guarded /owner/* matcher so the
+  // owner can authenticate without going through the admin login page.
+  if (path === '/owner/signin') return pub.ownerSigninView(ctx);
   if (path === '/admin/recover') return pub.adminRecoverView(ctx);
   if (path === '/worker/ride-bookings') return guard('worker', ctx) || ride.workerRideView(ctx);
   // Booking system, one view per panel. Declared before the generic panel

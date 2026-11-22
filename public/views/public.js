@@ -189,9 +189,6 @@ const ADMIN_ROLES = ['owner', 'admin'];
 
 async function ownerStatus() {
   const fallback = {
-    owner_exists: false,
-    admin_count: 0,
-    owner_email_masked: '',
     setup_required: false,
     recovery_enabled: false
   };
@@ -218,10 +215,6 @@ function adminNotice(status) {
 export async function adminSigninView(ctx) {
   if (ctx.user) return { redirect: PANEL_HOME[ctx.user.role] || '#/' };
   const status = await ownerStatus();
-  const accountHint = status.owner_exists
-    ? `<p class="muted">Owner account on file: <strong>${esc(status.owner_email_masked || 'registered owner email')}</strong>
-        ${status.admin_count ? ` · ${status.admin_count} primary admin${status.admin_count === 1 ? '' : 's'}` : ''}</p>`
-    : '<p class="muted">No Owner Admin account exists yet.</p>';
 
   const html = `<div class="container" style="max-width:640px">
     <div class="card">
@@ -229,7 +222,6 @@ export async function adminSigninView(ctx) {
       <h1>Administrator sign in</h1>
       <p class="muted">Owner Admin and Primary Admin accounts only.</p>
       ${adminNotice(status)}
-      ${accountHint}
       <form id="admin-signin" novalidate style="margin-top:12px">
         <div class="field">
           <label for="admin-email">Administrator email</label>
@@ -288,6 +280,73 @@ export async function adminSigninView(ctx) {
   };
 
   return { title: 'Administrator sign in', html, mount };
+}
+
+/**
+ * Private owner sign-in. Deliberately not linked from the public site, the admin
+ * login page or the admin panel: the owner shares this URL only from the owner
+ * panel. It accepts owner credentials only, so owner and admin authentication
+ * remain separate entry points.
+ */
+export async function ownerSigninView(ctx) {
+  if (ctx.user) return { redirect: PANEL_HOME[ctx.user.role] || '#/' };
+  const html = `<div class="container" style="max-width:560px">
+    <div class="card">
+      <img class="auth-logo" src="/assets/logo.png?v=2" alt="WORKBRIDGE logo" width="180" height="120" />
+      <h1>Owner sign in</h1>
+      <p class="muted">Private owner access. This page is not linked from the public website and shows no owner details.</p>
+      <form id="owner-signin" novalidate>
+        <div class="field">
+          <label for="owner-email">Owner email</label>
+          <input id="owner-email" name="email" type="email" required maxlength="160" autocomplete="username" />
+        </div>
+        <div class="field">
+          <label for="owner-password">Password</label>
+          <input id="owner-password" name="password" type="password" required autocomplete="current-password" />
+        </div>
+        <div class="notice" id="owner-signin-error" hidden></div>
+        <button class="btn btn-navy btn-block" type="submit">Sign in as owner</button>
+      </form>
+      <div class="btn-row" style="margin-top:12px"><a class="link-quiet" href="#/">Back to home</a></div>
+    </div>
+  </div>`;
+  const mount = () => {
+    const form = document.getElementById('owner-signin');
+    const errorBox = document.getElementById('owner-signin-error');
+    if (!form) return;
+    const showError = (message) => {
+      if (!errorBox) return;
+      errorBox.hidden = !message;
+      errorBox.textContent = message || '';
+      errorBox.style.borderColor = '#c62828';
+      errorBox.style.color = '#c62828';
+    };
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      showError('');
+      const button = form.querySelector('button[type="submit"]');
+      const body = formObject(form);
+      busy(button, true, 'Signing in…');
+      try {
+        const res = await api.post('/auth/login', { email: body.email, password: body.password });
+        const role = res && res.user ? res.user.role : '';
+        if (role !== 'owner') {
+          await api.post('/auth/logout').catch(() => {});
+          ctx.setUser(null);
+          showError('These credentials are not an owner account.');
+          return;
+        }
+        ctx.setUser(res.user);
+        toast('Signed in as owner');
+        location.hash = PANEL_HOME.owner || '#/owner';
+      } catch (error) {
+        showError((error && error.message) || 'Sign in failed.');
+      } finally {
+        busy(button, false);
+      }
+    });
+  };
+  return { title: 'Owner sign in', html, mount };
 }
 
 export async function adminRecoverView(ctx) {
