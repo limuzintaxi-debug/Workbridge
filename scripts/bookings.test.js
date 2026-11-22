@@ -408,7 +408,8 @@ try {
     assert.ok(booking, 'the business must see its own booking');
     assert.equal(booking.offers.length, 4, 'only four offers are shown');
     assert.deepEqual(booking.offers.map((o) => o.price), [300, 400, 450, 500]);
-    assert.equal(booking.status, 'created', 'the cheapest offer is never confirmed automatically');
+    assert.equal(booking.status, 'offers', 'received offers move the booking to the offers stage');
+    assert.ok(!booking.selected_driver_id, 'the cheapest offer is never selected automatically');
 
     selectedOffer = booking.offers.find((o) => o.price === 400);
     selectedDriverIndex = prices.indexOf(400);
