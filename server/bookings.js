@@ -49,6 +49,13 @@ export const stageIndex = (status) => STAGE_FLOW.indexOf(status);
 
 export const isBusinessBooking = (booking) => Boolean(booking && booking.kind === 'business');
 
+/**
+ * One pipeline serves both the business panel and the public "Book Your Car"
+ * customer flow, so every offer/selection/stage route must accept both kinds.
+ */
+export const isBookingRecord = (booking) =>
+  Boolean(booking && (booking.kind === 'business' || booking.kind === 'customer'));
+
 export function driverProfile(userId) {
   return data().workerProfiles.find((profile) => profile.user_id === userId) || null;
 }
@@ -255,6 +262,35 @@ export function bookingView(booking, viewer) {
 }
 
 /** Append-only stage history with timestamps — small and audit-friendly. */
+/**
+ * Public view for the customer who created a "Book Your Car" request. It shows
+ * the offers received and, only after the selected driver accepts, that one
+ * driver's contact details — never another driver's.
+ */
+export function customerBookingView(booking) {
+  const base = bookingView(booking, null);
+  const unlocked = contactUnlocked(booking) && booking.status !== 'cancelled';
+  let selectedDriver = null;
+  if (booking.selected_driver_id) {
+    const record = driverRecord(booking.selected_driver_id);
+    selectedDriver = {
+      name: record?.full_name || record?.name || 'Selected driver',
+      phone: unlocked ? record?.phone || '' : '',
+      vehicle_name: booking.selected_vehicle || '',
+      price: booking.selected_price || 0
+    };
+  }
+  return {
+    ...base,
+    offers: visibleOffers(booking).map(offerView),
+    offer_count: validOffers(booking).length,
+    eligible_driver_count: eligibleDrivers(booking).length,
+    selected_driver: selectedDriver,
+    customer_name: booking.customer_name || '',
+    customer_phone: booking.customer_phone || ''
+  };
+}
+
 export function pushEvent(booking, status, actor) {
   if (!Array.isArray(booking.events)) booking.events = [];
   booking.events.push({
@@ -285,6 +321,6 @@ export function roundMoney(value) {
 
 /** Admins see only bookings inside their assigned area. */
 export function scopedBookings(admin) {
-  const list = (data().rideBookings || []).filter(isBusinessBooking);
+  const list = (data().rideBookings || []).filter(isBookingRecord);
   return list.filter((booking) => inScope(admin, booking));
 }
