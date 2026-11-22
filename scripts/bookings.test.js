@@ -1,0 +1,585 @@
+#!/usr/bin/env node
+/**
+ * WORKBRIDGE — four panels, booking lifecycle and permission regression test.
+ *
+ * Boots the real server against a throwaway data directory and proves:
+ *   1. Owner privacy, and owner-only creation/approval/suspension of admins with
+ *      global or regional scope.
+ *   2. Admin limits: cannot see or modify the owner, cannot manage another admin,
+ *      cannot widen its own authority.
+ *   3. Business bookings reach only eligible drivers (approved, right category,
+ *      right region); ordinary workers never receive them.
+ *   4. Driver offers, the four lowest offers shown to the business, and the
+ *      business selecting the final driver (never automatic).
+ *   5. The enforced stage order: accept → pickup → drop-off → complete order →
+ *      payment → completed, with no way to skip a stage through the API.
+ *   6. Contact details unlock only for the selected driver after acceptance.
+ *   7. Commission recorded from the owner's setting, and financial records
+ *      scoped to an admin's region.
+ *
+ * Run with: npm run test:bookings
+ */
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+
+const PORT = Number(process.env.TEST_BOOKINGS_PORT || 3207);
+const BASE = `http://127.0.0.1:${PORT}`;
+const dataDir = await mkdtemp(path.join(os.tmpdir(), 'wb-bookings-'));
+const stamp = Date.now().toString(36);
+
+let child = null;
+let passed = 0;
+
+function start() {
+  child = spawn(process.execPath, ['server/index.js'], {
+    env: {
+      ...process.env,
+      PORT: String(PORT),
+      DATA_DIR: dataDir,
+      SESSION_SECRET: 'bookings-test-session-secret-workbridge',
+      NODE_ENV: 'test',
+      // Deterministic first-run setup: ignore any SETUP_TOKEN from the host env.
+      SETUP_TOKEN: '',
+      SMTP_HOST: '',
+      SMTP_USER: '',
+      SMTP_PASS: '',
+      EMAIL_CAPTURE_DIR: path.join(dataDir, 'outbox')
+    },
+    stdio: ['ignore', 'ignore', 'pipe']
+  });
+  child.stderr.on('data', (data) => {
+    const text = String(data);
+    if (!text.includes('Supabase sync failed') && !text.includes('Supabase load failed')) {
+      process.stderr.write(`[server] ${text}`);
+    }
+  });
+}
+
+async function waitForServer() {
+  for (let i = 0; i < 160; i += 1) {
+    try {
+      const res = await fetch(`${BASE}/api/setup/status`);
+      if (res.ok) return;
+    } catch {
+      /* not listening yet */
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  throw new Error('server did not start');
+}
+
+function client() {
+  let cookie = '';
+  return {
+    async call(method, url, body) {
+      const res = await fetch(`${BASE}${url}`, {
+        method,
+        headers: {
+          ...(body ? { 'content-type': 'application/json' } : {}),
+          ...(cookie ? { cookie } : {})
+        },
+        body: body ? JSON.stringify(body) : undefined
+      });
+      for (const raw of res.headers.getSetCookie ? res.headers.getSetCookie() : []) {
+        const pair = raw.split(';')[0];
+        if (pair.startsWith('wb_session=')) cookie = pair;
+      }
+      const text = await res.text();
+      let json = null;
+      try {
+        json = text ? JSON.parse(text) : null;
+      } catch {
+        json = null;
+      }
+      return { status: res.status, json, text };
+    },
+    get(url) {
+      return this.call('GET', url);
+    },
+    post(url, body) {
+      return this.call('POST', url, body);
+    },
+    put(url, body) {
+      return this.call('PUT', url, body);
+    },
+    patch(url, body) {
+      return this.call('PATCH', url, body);
+    }
+  };
+}
+
+async function step(name, fn) {
+  try {
+    await fn();
+    passed += 1;
+    console.log(`  ok   ${name}`);
+  } catch (error) {
+    console.log(`  FAIL ${name}`);
+    throw error;
+  }
+}
+
+const anon = client();
+const owner = client();
+const globalAdmin = client();
+const uaeAdmin = client();
+const business = client();
+const otherBusiness = client();
+const drivers = [client(), client(), client(), client(), client()];
+const farDriver = client();
+const wrongCategoryDriver = client();
+
+const OWNER_EMAIL = `owner${stamp}@workbridge.test`;
+const OWNER_PASS = 'Owner#12345';
+const GLOBAL_EMAIL = `global${stamp}@workbridge.test`;
+const GLOBAL_PASS = 'GlobalAdmin#123';
+const UAE_EMAIL = `uae${stamp}@workbridge.test`;
+const UAE_PASS = 'UaeAdmin#1234';
+
+try {
+  start();
+  await waitForServer();
+  console.log('\nWORKBRIDGE booking & permission test\n');
+
+  let ownerId = null;
+  let uaeAdminId = null;
+  let bookingId = null;
+  let bookingRef = null;
+  let selectedOffer = null;
+  let selectedDriverIndex = -1;
+  const driverIds = [];
+
+  await step('the first account is the private platform owner', async () => {
+    const created = await anon.post('/api/setup/admin', {
+      email: OWNER_EMAIL,
+      password: OWNER_PASS,
+      full_name: 'Platform Owner'
+    });
+    assert.equal(created.status, 201, created.text);
+
+    const login = await owner.post('/api/auth/login', { email: OWNER_EMAIL, password: OWNER_PASS });
+    assert.equal(login.status, 200, login.text);
+    assert.equal(login.json.user.role, 'owner');
+    ownerId = login.json.user.id;
+  });
+
+  await step('the owner creates a global admin and a regional admin', async () => {
+    const global = await owner.post('/api/owner/admins/create', {
+      email: GLOBAL_EMAIL,
+      full_name: 'Global Admin',
+      password: GLOBAL_PASS,
+      scope: { level: 'global', mode: 'global' }
+    });
+    assert.equal(global.status, 201, global.text);
+    assert.match(JSON.stringify(global.json.admin.admin_scope), /global/);
+
+    const regional = await owner.post('/api/owner/admins/create', {
+      email: UAE_EMAIL,
+      full_name: 'UAE Admin',
+      password: UAE_PASS,
+      scope: { level: 'regional', mode: 'regional', country: 'United Arab Emirates', city: '' }
+    });
+    assert.equal(regional.status, 201, regional.text);
+    uaeAdminId = regional.json.admin.id;
+
+    const globalLogin = await globalAdmin.post('/api/auth/login', {
+      email: GLOBAL_EMAIL,
+      password: GLOBAL_PASS
+    });
+    assert.equal(globalLogin.status, 200, globalLogin.text);
+    assert.equal(globalLogin.json.user.role, 'admin');
+
+    const uaeLogin = await uaeAdmin.post('/api/auth/login', { email: UAE_EMAIL, password: UAE_PASS });
+    assert.equal(uaeLogin.status, 200, uaeLogin.text);
+    assert.equal(uaeLogin.json.user.role, 'admin');
+  });
+
+  await step('a regional admin cannot change platform-wide switches', async () => {
+    const settings = await uaeAdmin.get('/api/ride-booking/settings');
+    assert.equal(settings.status, 200, settings.text);
+    assert.notEqual(settings.json.scope.level, 'global');
+
+    const attempt = await uaeAdmin.patch('/api/ride-booking/settings', { enabled: true });
+    assert.equal(attempt.status, 403, attempt.text);
+  });
+
+  await step('the owner account is invisible and untouchable to admins', async () => {
+    const users = await globalAdmin.get('/api/admin/users');
+    assert.equal(users.status, 200, users.text);
+    const roles = users.json.users.map((u) => u.role);
+    assert.ok(!roles.includes('owner'), 'the owner must never appear in admin listings');
+    assert.ok(!roles.includes('admin'), 'admins must not manage other admins');
+
+    const hijack = await globalAdmin.patch(`/api/admin/users/${ownerId}`, { full_name: 'Hijacked' });
+    assert.equal(hijack.status, 403, hijack.text);
+    assert.equal(hijack.json.error, 'owner_protected');
+
+    const suspend = await globalAdmin.patch(`/api/admin/users/${ownerId}`, { status: 'suspended' });
+    assert.equal(suspend.status, 403, suspend.text);
+  });
+
+  await step('an admin cannot manage another admin or widen its own scope', async () => {
+    const patch = await globalAdmin.patch(`/api/admin/users/${uaeAdminId}`, { full_name: 'Hijacked' });
+    assert.equal(patch.status, 403, patch.text);
+    assert.equal(patch.json.error, 'admin_protected');
+
+    const widen = await uaeAdmin.patch(`/api/owner/admins/${uaeAdminId}/access`, {
+      scope: { level: 'global', mode: 'global' }
+    });
+    assert.equal(widen.status, 403, widen.text);
+
+    const ownerPanel = await uaeAdmin.get('/api/owner/admins/list');
+    assert.equal(ownerPanel.status, 403, ownerPanel.text);
+  });
+
+  await step('the owner enables ride booking and sets a 2% commission', async () => {
+    const enabled = await owner.patch('/api/ride-booking/settings', { enabled: true });
+    assert.equal(enabled.status, 200, enabled.text);
+    assert.equal(enabled.json.enabled, true);
+
+    const rate = await owner.put('/api/admin/settings/commission', {
+      enabled: true,
+      rate: 2,
+      payer: 'business'
+    });
+    assert.equal(rate.status, 200, rate.text);
+
+    const read = await owner.get('/api/admin/settings/commission');
+    assert.equal(read.json.commission.rate, 2);
+    assert.equal(read.json.commission.enabled, true);
+  });
+
+  await step('a business registers in Saudi Arabia', async () => {
+    const res = await business.post('/api/auth/register', {
+      role: 'business',
+      email: `biz${stamp}@workbridge.test`,
+      password: 'BizPass#123',
+      full_name: 'Riyadh Logistics',
+      phone: '+966500000001',
+      company_name: 'Riyadh Logistics',
+      country: 'Saudi Arabia',
+      address: 'King Fahd Road'
+    });
+    assert.equal(res.status, 201, res.text);
+    assert.equal(res.json.user.role, 'business');
+
+    const other = await otherBusiness.post('/api/auth/register', {
+      role: 'business',
+      email: `biz2${stamp}@workbridge.test`,
+      password: 'BizPass#123',
+      full_name: 'Second Business',
+      phone: '+966500000002',
+      company_name: 'Second Business',
+      country: 'Saudi Arabia'
+    });
+    assert.equal(other.status, 201, other.text);
+  });
+
+  await step('five Riyadh drivers register and an admin approves them for VIP', async () => {
+    for (let i = 0; i < 5; i += 1) {
+      const reg = await drivers[i].post('/api/auth/register', {
+        role: 'worker',
+        email: `driver${i}${stamp}@workbridge.test`,
+        password: 'Driver#1234',
+        full_name: `Driver ${i + 1}`,
+        phone: `+966500001${String(i).padStart(2, '0')}`,
+        category: 'Driver',
+        aqama: `12345678${i}0`,
+        city: 'Riyadh',
+        country: 'Saudi Arabia'
+      });
+      assert.equal(reg.status, 201, reg.text);
+      driverIds.push(reg.json.user.id);
+
+      const approved = await globalAdmin.patch(`/api/admin/drivers/${reg.json.user.id}/booking`, {
+        booking_approved: true,
+        vehicle_categories: ['VIP'],
+        vehicle_name: `Vehicle ${i + 1}`
+      });
+      assert.equal(approved.status, 200, approved.text);
+      assert.equal(approved.json.driver.booking_approved, true);
+    }
+  });
+
+  await step('a driver outside the region and a wrong-category driver are approved but not eligible', async () => {
+    const far = await farDriver.post('/api/auth/register', {
+      role: 'worker',
+      email: `fardriver${stamp}@workbridge.test`,
+      password: 'Driver#1234',
+      full_name: 'Dubai Driver',
+      phone: '+971500000001',
+      category: 'Driver',
+      aqama: '9876543210',
+      city: 'Dubai',
+      country: 'United Arab Emirates'
+    });
+    assert.equal(far.status, 201, far.text);
+    const farOk = await globalAdmin.patch(`/api/admin/drivers/${far.json.user.id}/booking`, {
+      booking_approved: true,
+      vehicle_categories: ['VIP'],
+      vehicle_name: 'Dubai VIP'
+    });
+    assert.equal(farOk.status, 200, farOk.text);
+
+    const wrong = await wrongCategoryDriver.post('/api/auth/register', {
+      role: 'worker',
+      email: `smallcar${stamp}@workbridge.test`,
+      password: 'Driver#1234',
+      full_name: 'Small Car Only',
+      phone: '+966500002000',
+      category: 'Driver',
+      aqama: '1111222233',
+      city: 'Riyadh',
+      country: 'Saudi Arabia'
+    });
+    assert.equal(wrong.status, 201, wrong.text);
+    const wrongOk = await globalAdmin.patch(`/api/admin/drivers/${wrong.json.user.id}/booking`, {
+      booking_approved: true,
+      vehicle_categories: ['Small Car'],
+      vehicle_name: 'Small Car'
+    });
+    assert.equal(wrongOk.status, 200, wrongOk.text);
+  });
+
+  await step('a business booking is distributed to eligible drivers only', async () => {
+    const res = await business.post('/api/bookings', {
+      pickup: 'Riyadh Airport',
+      destination: 'Kingdom Centre',
+      date: '2026-12-01',
+      time: '09:30',
+      vehicle_category: 'VIP',
+      requirements: 'Two passengers',
+      details: 'Flight SV123'
+    });
+    assert.equal(res.status, 201, res.text);
+    bookingId = res.json.booking.id;
+    bookingRef = res.json.booking.ref;
+    assert.equal(res.json.booking.status, 'created');
+    assert.equal(
+      res.json.notified_drivers,
+      5,
+      'only the five approved Riyadh VIP drivers may receive it'
+    );
+  });
+
+  await step('an ordinary worker can neither see nor offer on the booking', async () => {
+    const available = await wrongCategoryDriver.get('/api/bookings/available');
+    assert.equal(available.status, 200, available.text);
+    assert.equal(available.json.bookings.length, 0, 'wrong category must not receive the booking');
+
+    const farAvailable = await farDriver.get('/api/bookings/available');
+    assert.equal(farAvailable.json.bookings.length, 0, 'another country must not receive it');
+
+    const offer = await wrongCategoryDriver.post(`/api/bookings/${bookingId}/offers`, {
+      vehicle_name: 'Corolla',
+      vehicle_category: 'VIP',
+      price: 100
+    });
+    assert.equal(offer.status, 403, offer.text);
+    assert.equal(offer.json.error, 'not_eligible');
+
+    const create = await wrongCategoryDriver.post('/api/bookings', {
+      pickup: 'A',
+      destination: 'B',
+      date: '2026-12-01',
+      time: '09:30',
+      vehicle_category: 'VIP'
+    });
+    assert.equal(create.status, 403, create.text);
+  });
+
+  await step('eligible drivers submit offers and the business sees the four lowest', async () => {
+    const prices = [500, 400, 300, 450, 600];
+    for (let i = 0; i < 5; i += 1) {
+      const res = await drivers[i].post(`/api/bookings/${bookingId}/offers`, {
+        vehicle_name: `Vehicle ${i + 1}`,
+        vehicle_category: 'VIP',
+        price: prices[i]
+      });
+      assert.ok([200, 201].includes(res.status), res.text);
+    }
+
+    const mine = await business.get('/api/bookings/mine');
+    assert.equal(mine.status, 200, mine.text);
+    const booking = mine.json.bookings.find((b) => b.id === bookingId);
+    assert.ok(booking, 'the business must see its own booking');
+    assert.equal(booking.offers.length, 4, 'only four offers are shown');
+    assert.deepEqual(booking.offers.map((o) => o.price), [300, 400, 450, 500]);
+    assert.equal(booking.status, 'created', 'the cheapest offer is never confirmed automatically');
+
+    selectedOffer = booking.offers.find((o) => o.price === 400);
+    selectedDriverIndex = prices.indexOf(400);
+  });
+
+  await step('the business selects a driver and contacts stay hidden until acceptance', async () => {
+    const select = await business.post(`/api/bookings/${bookingId}/select`, {
+      offer_id: selectedOffer.id
+    });
+    assert.equal(select.status, 200, select.text);
+    assert.equal(select.json.booking.status, 'selected');
+
+    const asDriver = await drivers[selectedDriverIndex].get(`/api/bookings/${bookingId}`);
+    assert.equal(asDriver.status, 200, asDriver.text);
+    assert.equal(asDriver.json.booking.status, 'selected');
+    const businessContact = asDriver.json.booking.business;
+    assert.ok(!businessContact || !businessContact.phone, 'contact must stay locked before acceptance');
+
+    const notSelected = await drivers[0].get(`/api/bookings/${bookingId}`);
+    assert.equal(notSelected.status, 403, 'a non-selected driver cannot open the booking');
+  });
+
+  await step('the ride cannot skip stages and only the selected driver acts', async () => {
+    const skipPickup = await drivers[selectedDriverIndex].post(`/api/bookings/${bookingId}/pickup`, {});
+    assert.equal(skipPickup.status, 409, skipPickup.text);
+    assert.equal(skipPickup.json.error, 'wrong_stage');
+
+    const skipComplete = await drivers[selectedDriverIndex].post(
+      `/api/bookings/${bookingId}/complete-order`,
+      {}
+    );
+    assert.equal(skipComplete.status, 409, skipComplete.text);
+
+    const outsider = await drivers[0].post(`/api/bookings/${bookingId}/accept`, {});
+    assert.equal(outsider.status, 403, outsider.text);
+    assert.equal(outsider.json.error, 'not_selected');
+
+    const earlyPayment = await business.post(`/api/bookings/${bookingId}/payment`, {
+      amount: 400,
+      reference: 'TX-EARLY'
+    });
+    assert.equal(earlyPayment.status, 409, earlyPayment.text);
+  });
+
+  await step('acceptance confirms the booking and unlocks both contact numbers', async () => {
+    const accept = await drivers[selectedDriverIndex].post(`/api/bookings/${bookingId}/accept`, {});
+    assert.equal(accept.status, 200, accept.text);
+    assert.equal(accept.json.booking.status, 'confirmed');
+
+    const driverView = await drivers[selectedDriverIndex].get(`/api/bookings/${bookingId}`);
+    assert.ok(driverView.json.booking.business?.phone, 'the driver sees the business phone');
+
+    const businessView = await business.get('/api/bookings/mine');
+    const booking = businessView.json.bookings.find((b) => b.id === bookingId);
+    assert.ok(booking.driver?.phone, 'the business sees the selected driver phone');
+  });
+
+  await step('pickup, drop-off and completion are separate recorded steps', async () => {
+    const pickup = await drivers[selectedDriverIndex].post(`/api/bookings/${bookingId}/pickup`, {});
+    assert.equal(pickup.status, 200, pickup.text);
+    assert.equal(pickup.json.booking.status, 'pickup');
+
+    const doublePickup = await drivers[selectedDriverIndex].post(`/api/bookings/${bookingId}/pickup`, {});
+    assert.equal(doublePickup.status, 409, 'a stage cannot be repeated');
+
+    const dropoff = await drivers[selectedDriverIndex].post(`/api/bookings/${bookingId}/dropoff`, {});
+    assert.equal(dropoff.status, 200, dropoff.text);
+    assert.equal(dropoff.json.booking.status, 'dropoff');
+
+    const complete = await drivers[selectedDriverIndex].post(
+      `/api/bookings/${bookingId}/complete-order`,
+      {}
+    );
+    assert.equal(complete.status, 200, complete.text);
+    assert.equal(complete.json.booking.status, 'complete_order');
+
+    const earlyFinalize = await drivers[selectedDriverIndex].post(
+      `/api/bookings/${bookingId}/finalize`,
+      {}
+    );
+    assert.equal(earlyFinalize.status, 409, 'completion needs payment first');
+  });
+
+  await step('payment records the commission from the owner setting', async () => {
+    const pay = await business.post(`/api/bookings/${bookingId}/payment`, {
+      amount: 400,
+      reference: 'TX-400-OK',
+      method: 'bank_transfer'
+    });
+    assert.equal(pay.status, 200, pay.text);
+    assert.equal(pay.json.booking.status, 'paid');
+    assert.equal(pay.json.booking.payment.commission_rate, 2);
+    assert.equal(pay.json.booking.payment.commission_amount, 8);
+    assert.equal(pay.json.booking.payment.payable_amount, 392);
+
+    const otherPay = await otherBusiness.post(`/api/bookings/${bookingId}/payment`, {
+      amount: 400,
+      reference: 'TX-HIJACK'
+    });
+    assert.equal(otherPay.status, 403, 'another business cannot pay this booking');
+  });
+
+  await step('the booking completes only after payment', async () => {
+    const finalize = await business.post(`/api/bookings/${bookingId}/finalize`, {});
+    assert.equal(finalize.status, 200, finalize.text);
+    assert.equal(finalize.json.booking.status, 'completed');
+
+    const mine = await business.get('/api/bookings/mine');
+    const booking = mine.json.bookings.find((b) => b.id === bookingId);
+    const stages = booking.events.map((event) => event.type);
+    for (const expected of ['created', 'selected', 'confirmed', 'pickup', 'dropoff', 'complete_order', 'paid', 'completed']) {
+      assert.ok(stages.includes(expected), `missing recorded stage: ${expected}`);
+    }
+  });
+
+  await step('commission is recorded for the owner and scoped for admins', async () => {
+    const ledger = await owner.get('/api/admin/commissions');
+    assert.equal(ledger.status, 200, ledger.text);
+    const entry = ledger.json.entries.find((row) => row.ref === bookingRef);
+    assert.ok(entry, 'the booking commission must appear in the ledger');
+    assert.equal(entry.amount, 400);
+    assert.equal(entry.commission_amount, 8);
+    assert.equal(entry.rate, 2);
+
+    const platform = await owner.get('/api/owner/platform');
+    assert.equal(platform.status, 200, platform.text);
+
+    const globalBookings = await globalAdmin.get('/api/admin/bookings');
+    assert.equal(globalBookings.status, 200, globalBookings.text);
+    assert.ok(
+      globalBookings.json.bookings.some((b) => b.id === bookingId),
+      'a global admin sees the booking'
+    );
+
+    const regionalBookings = await uaeAdmin.get('/api/admin/bookings');
+    assert.equal(regionalBookings.status, 200, regionalBookings.text);
+    assert.ok(
+      !regionalBookings.json.bookings.some((b) => b.id === bookingId),
+      'a UAE admin must not see a Saudi booking'
+    );
+
+    const regionalPayments = await uaeAdmin.get('/api/admin/payments');
+    assert.equal(regionalPayments.status, 200, regionalPayments.text);
+    assert.ok(
+      !regionalPayments.json.payments.some((row) => row.ref === bookingRef),
+      'a UAE admin must not see Saudi financial records'
+    );
+
+    const globalPayments = await globalAdmin.get('/api/admin/payments');
+    assert.ok(
+      globalPayments.json.payments.some((row) => row.ref === bookingRef),
+      'a global admin sees the payment record'
+    );
+  });
+
+  await step('suspending a driver stops their access immediately', async () => {
+    const suspend = await owner.patch(`/api/admin/users/${driverIds[0]}`, { status: 'suspended' });
+    assert.ok([200, 204].includes(suspend.status), suspend.text);
+
+    const afterSuspend = await drivers[0].get('/api/bookings/available');
+    assert.ok(
+      [401, 403].includes(afterSuspend.status),
+      `a suspended session must stop working, got ${afterSuspend.status}`
+    );
+  });
+
+  console.log(`\n${passed} passed\n`);
+} catch (error) {
+  console.error(error);
+  process.exitCode = 1;
+} finally {
+  if (child) child.kill();
+  await rm(dataDir, { recursive: true, force: true });
+}
