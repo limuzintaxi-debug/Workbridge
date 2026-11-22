@@ -146,7 +146,7 @@ async function step(name, fn) {
 try {
   dataDir = await mkdtemp(path.join(os.tmpdir(), 'wb-invoice-'));
   server = spawn(process.execPath, ['server/index.js'], {
-    env: { ...process.env, DATA_DIR: dataDir, PORT: String(PORT), NODE_ENV: 'test' },
+    env: { ...process.env, DATA_DIR: dataDir, PORT: String(PORT), NODE_ENV: 'test', SETUP_TOKEN: '' },
     stdio: ['ignore', 'pipe', 'pipe']
   });
   server.stdout.on('data', () => {});

@@ -43,6 +43,7 @@ const server = spawn(process.execPath, ['server/index.js'], {
     NODE_ENV: 'test',
     PORT: String(PORT),
     DATA_DIR: dataDir,
+    SETUP_TOKEN: '',
     SESSION_SECRET: 'browser-check-session-secret',
     // No demo seed: this run starts exactly like a fresh deployment.
     SEED_DEMO: ''

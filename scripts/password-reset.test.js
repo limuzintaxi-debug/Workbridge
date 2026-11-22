@@ -61,7 +61,8 @@ function childEnv(extra = {}) {
     'SMTP_PASS',
     'RESEND_API_KEY',
     'EMAIL_CAPTURE_DIR',
-    'EMAIL_PROVIDER'
+    'EMAIL_PROVIDER',
+    'SETUP_TOKEN'
   ]) {
     delete env[key];
   }

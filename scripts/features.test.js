@@ -38,6 +38,8 @@ function start() {
       DATA_DIR: dataDir,
       SESSION_SECRET: 'features-test-session-secret-workbridge',
       NODE_ENV: 'test',
+      // Deterministic first-run setup: ignore any SETUP_TOKEN from the host env.
+      SETUP_TOKEN: '',
       SMTP_HOST: '',
       SMTP_USER: '',
       SMTP_PASS: '',

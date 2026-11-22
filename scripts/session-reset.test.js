@@ -36,6 +36,9 @@ function start() {
       DATA_DIR: dataDir,
       SESSION_SECRET: SECRET,
       NODE_ENV: 'test',
+      // First-run setup stays unguarded here so the fixture admin is created
+      // deterministically, whatever SETUP_TOKEN the deployment environment has.
+      SETUP_TOKEN: '',
       SMTP_HOST: '',
       SMTP_USER: '',
       SMTP_PASS: '',
