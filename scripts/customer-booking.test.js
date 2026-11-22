@@ -329,6 +329,71 @@ await step('admin can monitor the booking and its status', async () => {
   assert.equal(row.selected_driver_id, driverIds[1]);
 });
 
+await step('the chosen driver receives the complete booking details', async () => {
+  const mine = await drivers[1].get('/api/bookings/driver/mine');
+  const assigned = mine.json.bookings.find((b) => b.id === bookingId);
+  assert.ok(assigned, 'the chosen driver sees the booking');
+  assert.equal(assigned.status, 'confirmed');
+  assert.equal(assigned.kind, 'customer');
+  assert.ok(assigned.pickup, 'pickup is shown to the driver');
+  assert.ok(assigned.destination, 'destination is shown to the driver');
+  assert.ok(assigned.date, 'the date is shown to the driver');
+  assert.ok(assigned.vehicle_category, 'the vehicle category is shown');
+  assert.ok(assigned.selected_price, 'the agreed price is shown');
+  assert.ok(
+    assigned.customer && assigned.customer.phone,
+    'the chosen driver receives the customer phone number'
+  );
+  assert.equal(assigned.contact_hidden, false, 'contacts are visible while the ride is running');
+});
+
+await step('completing the booking removes the phone numbers but keeps the record', async () => {
+  for (const stage of ['pickup', 'dropoff', 'complete-order']) {
+    const res = await drivers[1].post(`/api/bookings/${bookingId}/${stage}`, {});
+    assert.equal(res.status, 200, `${stage}: ${res.text}`);
+  }
+
+  // A public customer booking has no business account, so its driver records
+  // the fare received before the booking can be completed.
+  const paid = await drivers[1].post(`/api/bookings/${bookingId}/payment`, {
+    amount: 300,
+    reference: 'CASH-TEST-1',
+    method: 'cash'
+  });
+  assert.equal(paid.status, 200, paid.text);
+
+  const done = await drivers[1].post(`/api/bookings/${bookingId}/finalize`, {});
+  assert.equal(done.status, 200, done.text);
+
+  // Driver dashboard: the customer's number is gone, everything else remains.
+  const mine = await drivers[1].get('/api/bookings/driver/mine');
+  const assigned = mine.json.bookings.find((b) => b.id === bookingId);
+  assert.equal(assigned.status, 'completed');
+  assert.equal(assigned.contact_hidden, true);
+  assert.equal(
+    assigned.customer.phone,
+    '',
+    'the customer phone number is removed from the driver dashboard'
+  );
+  assert.ok(assigned.ref, 'the booking reference is kept');
+  assert.ok(assigned.pickup && assigned.destination, 'the route is kept');
+  assert.ok(assigned.selected_price, 'the agreed price is kept');
+  assert.ok(assigned.payment && assigned.payment.amount, 'the payment record is kept');
+
+  // Customer page: the driver's number is gone, the booking stays readable.
+  const customer = await anon.get(`/api/ride-bookings/track/${token}`);
+  const booking = customer.json.booking;
+  assert.equal(booking.status, 'completed');
+  assert.equal(booking.contact_hidden, true);
+  assert.equal(
+    booking.selected_driver.phone,
+    '',
+    'the driver phone number is removed from the customer dashboard'
+  );
+  assert.ok(booking.ref, 'the customer keeps the booking reference');
+  assert.ok(booking.selected_driver.name, 'the customer keeps the driver name');
+});
+
 if (child) child.kill();
 
 console.log(`\n${passed} passed, ${failed} failed\n`);
