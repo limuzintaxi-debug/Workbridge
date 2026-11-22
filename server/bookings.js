@@ -119,6 +119,22 @@ export function contactUnlocked(booking) {
   return stageIndex(booking.status) >= stageIndex('confirmed');
 }
 
+/**
+ * The two parties exchange contact details as soon as the customer or business
+ * has chosen a driver: the chosen driver needs the customer's number, and the
+ * customer needs the driver's. Nobody else sees them.
+ */
+export function contactVisible(booking) {
+  return booking.status !== 'cancelled' && stageIndex(booking.status) >= stageIndex('selected');
+}
+
+/**
+ * Once a booking is completed the phone numbers are withdrawn from every
+ * dashboard. The booking record itself (route, dates, price, payment, history)
+ * is kept untouched for accounting.
+ */
+export const phonesHidden = (booking) => booking.status === 'completed';
+
 function businessRecord(businessId) {
   const db = data();
   const user = db.users.find((u) => u.id === businessId) || null;
@@ -176,7 +192,8 @@ export function bookingView(booking, viewer) {
   const isBusinessOwner = Boolean(viewer && viewer.id === booking.business_id);
   const isSelectedDriver = Boolean(viewer && viewer.id === booking.selected_driver_id);
   const isAdminViewer = Boolean(viewer && (viewer.role === 'admin' || viewer.role === 'owner'));
-  const unlocked = contactUnlocked(booking) && booking.status !== 'cancelled';
+  const unlocked = contactVisible(booking);
+  const finished = phonesHidden(booking);
 
   const myOffer = viewer
     ? (booking.offers || []).find((offer) => offer.driver_id === viewer.id) || null
@@ -241,15 +258,34 @@ export function bookingView(booking, viewer) {
     }
   };
 
-  // Business identity is visible to the selected driver only after acceptance.
+  // Business identity is shared with the chosen driver as soon as they are selected.
   if (isBusinessOwner || (isSelectedDriver && unlocked) || isAdminViewer) {
     view.business = businessContact(booking.business_id);
+    if (finished) {
+      view.business.phone = '';
+      view.business.whatsapp = '';
+    }
   }
-  // The business also needs the confirmed driver's number, otherwise the two
-  // parties still cannot call each other after acceptance.
+  // The business also needs the chosen driver's number, otherwise the two
+  // parties still cannot call each other.
   if (unlocked && booking.selected_driver_id && (isSelectedDriver || isBusinessOwner || isAdminViewer)) {
     view.driver = driverContact(booking.selected_driver_id);
+    if (finished) {
+      view.driver.phone = '';
+      view.driver.whatsapp = '';
+    }
   }
+  // A public "Book Your Car" booking has no business account, so the chosen
+  // driver gets the customer's details — withdrawn again once completed.
+  if (unlocked && (isSelectedDriver || isAdminViewer || isBusinessOwner) && (booking.customer_name || booking.customer_phone)) {
+    view.customer = {
+      name: booking.customer_name || 'Customer',
+      phone: finished ? '' : booking.customer_phone || '',
+      whatsapp: finished ? '' : booking.customer_phone || ''
+    };
+  }
+  // Lets every panel state plainly that the numbers were removed on completion.
+  view.contact_hidden = finished;
 
   if (booking.payment) {
     view.payment = {
@@ -277,14 +313,15 @@ export function bookingView(booking, viewer) {
  */
 export function customerBookingView(booking) {
   const base = bookingView(booking, null);
-  const unlocked = contactUnlocked(booking) && booking.status !== 'cancelled';
+  const unlocked = contactVisible(booking);
+  const finished = phonesHidden(booking);
   let selectedDriver = null;
   if (booking.selected_driver_id) {
     const record = driverRecord(booking.selected_driver_id);
     const driverUser = record?.user || null;
     selectedDriver = {
       name: driverUser?.full_name || driverUser?.name || 'Selected driver',
-      phone: unlocked ? driverUser?.phone || '' : '',
+      phone: unlocked && !finished ? driverUser?.phone || '' : '',
       vehicle_name: booking.selected_vehicle || '',
       price: booking.selected_price || 0
     };
@@ -303,7 +340,8 @@ export function customerBookingView(booking) {
     eligible_driver_count: eligibleDrivers(booking).length,
     selected_driver: selectedDriver,
     customer_name: booking.customer_name || '',
-    customer_phone: booking.customer_phone || ''
+    customer_phone: booking.customer_phone || '',
+    contact_hidden: finished
   };
 }
 
