@@ -35,6 +35,8 @@ export function bookCarView() {
         ).join('')}
       </div>
 
+      <p id="ride-closed" class="card" hidden style="margin-top:16px">Ride booking is temporarily closed. Please try again later.</p>
+
       <form id="ride-form" class="card" hidden style="margin-top:16px">
         <h3 style="margin-top:0">Booking details — <span id="ride-chosen"></span></h3>
         <input type="hidden" id="ride-category" name="category" value="" />
@@ -61,6 +63,19 @@ export function bookCarView() {
       </div>
     </div>`,
     mount() {
+      // Reflect the administrator's global switch before the customer fills anything in.
+      api
+        .get('/ride-bookings/open')
+        .then((state) => {
+          if (!state || state.open !== false) return;
+          const notice = document.getElementById('ride-closed');
+          if (notice) notice.hidden = false;
+          for (const button of document.querySelectorAll('[data-category]')) {
+            button.disabled = true;
+          }
+        })
+        .catch(() => {});
+
       const form = document.getElementById('ride-form');
       const category = document.getElementById('ride-category');
       const chosen = document.getElementById('ride-chosen');
