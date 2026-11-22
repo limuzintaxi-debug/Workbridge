@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import crypto from 'node:crypto';
 import { config } from './config.js';
-import { data, persist, nextCounter } from './store.js';
+import { data, persist, nextCounter, storeInfo } from './store.js';
 import {
   hashPassword,
   verifyPassword,
@@ -147,15 +147,22 @@ function invoiceView(invoice) {
 /* --------------------------------------------------------------------- meta */
 
 router.get('/health', (req, res) => {
+  const info = storeInfo();
   res.json({
     ok: true,
     service: 'workbridge',
     time: nowIso(),
-    // Tells an operator whether accounts and bookings are being written to the
-    // permanent database or only to this container's temporary file.
+    // `driver` is the intended backend; `sync.last_error` is what the database
+    // actually answered on the last write, so this never implies a healthy
+    // connection when writes are being rejected.
     persistence: persistenceDriver(),
     supabase_configured: supabaseConfigured(),
-    permanent_storage: persistenceDriver() === 'supabase'
+    storage: {
+      driver: info.driver,
+      last_synced_at: info.sync.last_synced_at,
+      last_error: info.sync.last_error,
+      fallback_file: info.file
+    }
   });
 });
 

@@ -449,6 +449,7 @@ export async function initStore() {
       }
       console.log('[workbridge] loaded state from Supabase.');
     } catch (error) {
+      syncStatus.last_error = error.message;
       console.error(`[workbridge] Supabase load failed: ${error.message}`);
     }
   }
