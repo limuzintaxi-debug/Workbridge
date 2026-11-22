@@ -140,24 +140,6 @@ router.get('/bookings/mine', bookingBusiness, (req, res) => {
   res.json({ bookings: list });
 });
 
-router.get('/bookings/:id', (req, res) => {
-  if (!req.user) return fail(res, 401, 'auth_required', 'Please sign in first.');
-  const booking = findBooking(req.params.id);
-  if (!booking) return fail(res, 404, 'not_found', 'Booking not found.');
-  const viewer = req.user;
-  const allowed =
-    viewer.id === booking.business_id ||
-    viewer.id === booking.selected_driver_id ||
-    (booking.offers || []).some((offer) => offer.driver_id === viewer.id) ||
-    viewer.role === 'admin' ||
-    viewer.role === 'owner';
-  if (!allowed) return fail(res, 403, 'forbidden', 'This booking is not available to you.');
-  if (viewer.role === 'admin' && !inScope(viewer, booking)) {
-    return fail(res, 403, 'out_of_scope', 'This booking is outside your assigned area.');
-  }
-  res.json({ booking: bookingView(booking, viewer) });
-});
-
 /** The business compares the four lowest offers and picks the driver itself. */
 router.post('/bookings/:id/select', bookingBusiness, (req, res) => {
   const booking = findBooking(req.params.id);
@@ -228,6 +210,29 @@ router.get('/bookings/driver/mine', requireRole('worker'), (req, res) => {
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     .map((b) => bookingView(b, req.user));
   res.json({ bookings: list });
+});
+
+/**
+ * Declared after the fixed /bookings paths: Express matches in order, so a
+ * '/bookings/:id' route registered earlier would swallow '/bookings/available'
+ * and '/bookings/driver/mine' and answer them with 404 not_found.
+ */
+router.get('/bookings/:id', (req, res) => {
+  if (!req.user) return fail(res, 401, 'auth_required', 'Please sign in first.');
+  const booking = findBooking(req.params.id);
+  if (!booking) return fail(res, 404, 'not_found', 'Booking not found.');
+  const viewer = req.user;
+  const allowed =
+    viewer.id === booking.business_id ||
+    viewer.id === booking.selected_driver_id ||
+    (booking.offers || []).some((offer) => offer.driver_id === viewer.id) ||
+    viewer.role === 'admin' ||
+    viewer.role === 'owner';
+  if (!allowed) return fail(res, 403, 'forbidden', 'This booking is not available to you.');
+  if (viewer.role === 'admin' && !inScope(viewer, booking)) {
+    return fail(res, 403, 'out_of_scope', 'This booking is outside your assigned area.');
+  }
+  res.json({ booking: bookingView(booking, viewer) });
 });
 
 router.post('/bookings/:id/offers', requireRole('worker'), (req, res) => {
