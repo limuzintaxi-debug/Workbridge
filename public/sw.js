@@ -1,5 +1,16 @@
-/* WORKBRIDGE service worker — app shell caching only. API calls always go to the network. */
-const CACHE = 'workbridge-v6';
+/* WORKBRIDGE service worker — v7.
+ *
+ * Why this file matters: the previous version (v6) served /app.js and
+ * /views/*.js CACHE-FIRST and was itself never changed, so a returning browser
+ * kept running the pre-upgrade application forever — new panels existed on the
+ * server but were never executed in the browser.
+ *
+ * v7 is NETWORK-FIRST for every same-origin GET. The cache is an offline
+ * fallback only, so each new deployment reaches an existing visitor on their
+ * next load. /api/ is never intercepted.
+ */
+const CACHE = 'workbridge-v7';
+
 const SHELL = [
   '/',
   '/index.html',
@@ -9,10 +20,16 @@ const SHELL = [
   '/ui.js',
   '/views/common.js',
   '/views/public.js',
+  '/views/account.js',
   '/views/worker.js',
   '/views/business.js',
   '/views/admin.js',
+  '/views/admin-extras.js',
+  '/views/owner.js',
+  '/views/ride.js',
+  '/views/mall.js',
   '/views/docs.js',
+  '/views/agreement-open.js',
   '/assets/logo.png?v=2',
   '/assets/favicon-32.png?v=2',
   '/assets/apple-touch-icon.png?v=2',
@@ -26,7 +43,9 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(CACHE)
-      .then((cache) => cache.addAll(SHELL))
+      // allSettled: one missing optional file must not stop the worker from
+      // installing, otherwise the update is silently dropped.
+      .then((cache) => Promise.allSettled(SHELL.map((url) => cache.add(url))))
       .then(() => self.skipWaiting())
       .catch(() => self.skipWaiting())
   );
@@ -41,56 +60,34 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+function fromNetwork(request, cacheKey) {
+  return fetch(request, { cache: 'no-cache' }).then((response) => {
+    if (response && response.ok) {
+      const copy = response.clone();
+      caches.open(CACHE).then((cache) => cache.put(cacheKey || request, copy)).catch(() => {});
+    }
+    return response;
+  });
+}
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+  // Never cache API traffic: sessions, invoices and bookings must be live.
   if (url.pathname.startsWith('/api/')) return;
 
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put('/index.html', copy)).catch(() => {});
-          return response;
-        })
-        .catch(() => caches.match('/index.html'))
-    );
-    return;
-  }
-
-  // Brand artwork and the manifest are network-first. Cache-first would keep
-  // serving the previous logo from an older cache even after the file changed,
-  // which is exactly how a replaced logo stays invisible to a returning visitor.
-  if (url.pathname.startsWith('/assets/') || url.pathname === '/manifest.webmanifest') {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => {});
-          }
-          return response;
-        })
-        .catch(() => caches.match(request))
+      fromNetwork(request, '/index.html').catch(() =>
+        caches.match('/index.html').then((cached) => cached || caches.match('/'))
+      )
     );
     return;
   }
 
   event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) return cached;
-      return fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => {});
-          }
-          return response;
-        })
-        .catch(() => cached);
-    })
+    fromNetwork(request).catch(() => caches.match(request).then((cached) => cached || Response.error()))
   );
 });

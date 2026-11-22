@@ -51,9 +51,30 @@ export function emailConfigured() {
   return emailProvider() !== 'none';
 }
 
+/**
+ * Normalise MAIL_FROM into a sender the providers accept.
+ *
+ * A bare domain ("workbridges.live") or a bare address is a common and silent
+ * mistake: Resend answers 403 "domain is not verified" or 422 "invalid from",
+ * so the reset link is never sent. Accepting both shapes here means the value in
+ * Settings can stay human-readable without breaking delivery.
+ */
+const ADDRESS_RE = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
+const DOMAIN_RE = /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i;
+
+export function normalizeSender(raw) {
+  const value = String(raw || '').trim();
+  if (!value) return '';
+  // "WORKBRIDGE <no-reply@domain>" is already a full sender: use it verbatim.
+  if (/<[^<>]+>/.test(value)) return value;
+  if (ADDRESS_RE.test(value)) return `WORKBRIDGE <${value}>`;
+  if (DOMAIN_RE.test(value)) return `WORKBRIDGE <no-reply@${value}>`;
+  return value;
+}
+
 /** The only sender ever used for recovery mail. */
 export function senderAddress() {
-  return config.mailFrom || '';
+  return normalizeSender(config.mailFrom);
 }
 
 function transport() {
@@ -81,6 +102,12 @@ async function sendWithResend({ from, to, subject, text, html }) {
   if (!response.ok) {
     const detail = await response.text().catch(() => '');
     // Never include request headers here: they carry the API key.
+    if (/not verified|domain/i.test(detail) && response.status === 403) {
+      throw fail(
+        'email_domain_unverified',
+        'The sending domain is not verified with Resend. Add the domain in resend.com/domains and publish its DNS records, then retry.'
+      );
+    }
     throw fail('email_provider_error', `resend_${response.status}: ${detail.slice(0, 300)}`);
   }
 }
