@@ -12,7 +12,8 @@ import {
   storeInfo
 } from './store.js';
 import { hashPassword, verifyPassword, requireRole, setSessionCookie } from './security.js';
-import { mailConfigured, sendPasswordResetEmail } from './mail.js';
+import { mailConfigured, mailStatus, sendPasswordResetEmail } from './mail.js';
+import { getLastEmailAttempt } from './email.js';
 import { CURRENCY_CATALOG, DEFAULT_CURRENCY, isValidCurrency } from './currency.js';
 import { auth as supaAuth, uploadDocument, signedDocumentUrl, persistenceDriver } from './supabase.js';
 import { buildAgreementPdf, buildInvoicePdf } from './pdf.js';
@@ -101,7 +102,10 @@ router.post('/auth/forgot-password', async (req, res) => {
   }
 
   const user = data().users.find((u) => u.email === email);
-  if (!user) return res.json(generic);
+  // No account, so nothing was sent. The wording stays neutral, but the client
+  // is told the truth instead of showing a green "sent" for a typo or an
+  // address that was never registered.
+  if (!user) return res.json({ ...generic, email_sent: false, account_found: false });
 
   // A single-use, sha256-hashed token that expires after 30 minutes.
   const token = crypto.randomBytes(32).toString('hex');
@@ -123,8 +127,9 @@ router.post('/auth/forgot-password', async (req, res) => {
   // Deliver the single-use link to the account holder's own inbox only. The
   // generic wording above is kept so the endpoint never reveals which emails
   // have accounts.
+  let delivery = null;
   try {
-    await sendPasswordResetEmail({
+    delivery = await sendPasswordResetEmail({
       to: user.email,
       name: user.full_name,
       link,
@@ -132,15 +137,23 @@ router.post('/auth/forgot-password', async (req, res) => {
     });
   } catch (error) {
     console.error('[workbridge] password reset email failed:', error.message);
-    return fail(
-      res,
-      502,
-      'email_failed',
-      'The reset email could not be sent right now. Please try again, or contact support.'
-    );
+    // The provider's own reason is returned so the failure is actionable. This
+    // endpoint never reports success for a send that did not happen.
+    return fail(res, 502, error.code || 'email_failed', error.message);
   }
 
-  return res.json({ ...generic, email_sent: true });
+  return res.json({
+    ...generic,
+    email_sent: true,
+    account_found: true,
+    delivery: delivery
+      ? {
+          provider: delivery.provider,
+          sender: delivery.sender,
+          fallback_sender: Boolean(delivery.fallback_sender)
+        }
+      : null
+  });
 });
 
 router.post('/auth/reset-password', async (req, res) => {
@@ -230,9 +243,11 @@ router.post('/admin/users/:id/reset-link', requireRole('admin'), async (req, res
 
   const resetUrl = `${publicOrigin(req)}/#/reset-password?token=${token}`;
   let emailed = false;
+  let delivery = null;
+  let deliveryError = null;
   if (mailConfigured()) {
     try {
-      await sendPasswordResetEmail({
+      delivery = await sendPasswordResetEmail({
         to: user.email,
         name: user.full_name,
         link: resetUrl,
@@ -240,6 +255,7 @@ router.post('/admin/users/:id/reset-link', requireRole('admin'), async (req, res
       });
       emailed = true;
     } catch (error) {
+      deliveryError = error.message;
       console.error('[workbridge] admin reset email failed:', error.message);
     }
   }
@@ -249,10 +265,12 @@ router.post('/admin/users/:id/reset-link', requireRole('admin'), async (req, res
     email: user.email,
     expires_at: expiresAt,
     email_sent: emailed,
+    delivery: emailed && delivery ? { provider: delivery.provider, sender: delivery.sender } : null,
+    delivery_error: deliveryError,
     reset_url: resetUrl,
     message: emailed
       ? 'A single-use reset link was emailed to the account holder. It expires in 30 minutes.'
-      : 'Email delivery is not configured, so no email was sent. Share the single-use link below; it expires in 30 minutes.'
+      : 'No email was delivered, so no link reached the account holder. Share the single-use link below; it expires in 30 minutes.'
   });
 });
 
@@ -268,6 +286,8 @@ router.get('/admin/settings', requireRole('admin'), (req, res) => {
       supabase_configured: Boolean(config.supabaseUrl && config.supabaseServiceKey),
       supabase_auth: supabaseAuthConfigured(),
       mail_configured: mailConfigured(),
+      mail: mailStatus(),
+      mail_last_attempt: getLastEmailAttempt(),
       app_url: config.appUrl || null
     }
   });

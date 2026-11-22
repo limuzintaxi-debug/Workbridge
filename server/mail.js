@@ -49,7 +49,7 @@ export async function sendPasswordResetEmail({ to, name, link, expiresMinutes = 
     <p style="font-size:12px;color:#777">WORKBRIDGE — Booking • Agreement • Institutional &amp; Social Support • Invoice Maker</p>
   </div>`;
 
-  await sendMail({ to, subject: 'WORKBRIDGE — reset your password', text, html });
+  // Returns the real send result (provider and the sender that actually carried\n  // the message) so callers can report delivery instead of assuming it.\n  return sendMail({ to, subject: 'WORKBRIDGE — reset your password', text, html });
 }
 
 /** Diagnostics for the admin settings screen; never exposes credentials. */
