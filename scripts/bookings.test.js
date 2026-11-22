@@ -445,15 +445,11 @@ try {
   });
 
   await step('the ride cannot skip stages and only the selected driver acts', async () => {
-    const skipPickup = await drivers[selectedDriverIndex].post(`/api/bookings/${bookingId}/pickup`, {});
-    assert.equal(skipPickup.status, 409, skipPickup.text);
-    assert.equal(skipPickup.json.error, 'wrong_stage');
-
     const skipComplete = await drivers[selectedDriverIndex].post(
       `/api/bookings/${bookingId}/complete-order`,
       {}
     );
-    assert.equal(skipComplete.status, 409, skipComplete.text);
+    assert.equal(skipComplete.status, 409, 'order completion cannot precede pickup and drop-off');
 
     const outsider = await drivers[0].post(`/api/bookings/${bookingId}/accept`, {});
     assert.equal(outsider.status, 403, outsider.text);
@@ -464,6 +460,14 @@ try {
       reference: 'TX-EARLY'
     });
     assert.equal(earlyPayment.status, 409, earlyPayment.text);
+
+    // Pickup is the first driver action now that selection confirms the booking.
+    const pickup = await drivers[selectedDriverIndex].post(`/api/bookings/${bookingId}/pickup`, {});
+    assert.equal(pickup.status, 200, pickup.text);
+    assert.equal(pickup.json.booking.status, 'pickup');
+
+    const repeat = await drivers[selectedDriverIndex].post(`/api/bookings/${bookingId}/pickup`, {});
+    assert.equal(repeat.status, 409, 'pickup cannot be repeated');
   });
 
   await step('selection already confirmed the booking and unlocked both contacts', async () => {
