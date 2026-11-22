@@ -66,18 +66,18 @@ function bookingBusiness(req, res, next) {
 }
 
 /**
- * Payment for a business booking is recorded by that business. A public "Book
- * Your Car" booking has no business account, so its chosen driver records the
- * fare they received — that is what lets such a booking reach 'completed'.
+ * Payment is recorded by the business that created the booking, or by the
+ * driver who actually collected the fare — the driver has a "Receive Payment"
+ * button on every assigned booking, not only on public customer rides. A
+ * second attempt is refused further down, so either side may act first.
  */
 function bookingPayer(req, res, next) {
   if (!req.user) return fail(res, 401, 'auth_required', 'Please sign in first.');
   const booking = findBooking(req.params.id);
   if (!booking) return fail(res, 404, 'not_found', 'Booking not found.');
   const isBusinessOwner = req.user.role === 'business' && booking.business_id === req.user.id;
-  const isCustomerDriver =
-    booking.kind === 'customer' && booking.selected_driver_id === req.user.id;
-  if (!isBusinessOwner && !isCustomerDriver) {
+  const isSelectedDriver = booking.selected_driver_id === req.user.id;
+  if (!isBusinessOwner && !isSelectedDriver) {
     return fail(res, 403, 'forbidden', 'You cannot record payment for this booking.');
   }
   next();
@@ -283,7 +283,11 @@ router.post('/bookings/:id/offers', requireRole('worker'), (req, res) => {
   }
   const body = req.body || {};
   const vehicleName = str(body.vehicle_name, 120);
-  const vehicleCategory = str(body.vehicle_category, 40);
+  // The driver's offer form asks for two things only: price and vehicle name.
+  // The category is the booking's own category, which this driver has already
+  // been approved for (eligibility was checked above), so it is optional here
+  // and defaults to that value instead of being a third form field.
+  const vehicleCategory = str(body.vehicle_category, 40) || booking.vehicle_category;
   const price = roundMoney(body.price);
   if (!vehicleName) return fail(res, 400, 'missing_vehicle', 'Enter your vehicle name or model.');
   if (!VEHICLE_CATEGORIES.includes(vehicleCategory)) {
