@@ -16,6 +16,14 @@ import { hashPassword, requireRole } from './security.js';
 import { adminScope, inScope, filterByScope, isOwner, normalizeScope } from './scope.js';
 import { isValidCurrency } from './currency.js';
 import { PAY_PERIODS, round2, nowIso, isEmail, str, num } from './util.js';
+import {
+  eligibleDrivers,
+  pushEvent,
+  customerBookingView,
+  nextBookingRef,
+  newBookingId,
+  validOffers
+} from './bookings.js';
 
 const router = Router();
 const id = () => crypto.randomUUID();
@@ -275,22 +283,123 @@ router.post('/ride-bookings', (req, res) => {
     );
   }
 
-  const serial = nextCounter('rideBooking');
+  // The booking joins the same offer pipeline the business panel uses, so every
+  // eligible driver can price it and the customer picks the driver they want.
   const booking = {
-    id: id(),
-    ref: `WB-RIDE-${serial}`,
-    category,
+    id: newBookingId(),
+    ref: nextBookingRef(),
+    kind: 'customer',
+    status: 'created',
+    business_id: null,
+    pickup: str(body.pickup, 200) || 'Pickup to be confirmed with the driver',
+    destination: str(body.destination, 200) || 'As described in the booking details',
+    date: str(body.date, 40) || nowIso().slice(0, 10),
+    time: str(body.time, 20),
+    vehicle_category: category,
+    requirements: str(body.requirements, 400),
     details,
     customer_name: str(body.customer_name, 120),
     customer_phone: str(body.customer_phone, 40),
-    pickup: str(body.pickup, 200),
-    status: 'open',
-    assigned_worker_id: null,
-    created_at: nowIso()
+    currency: data().settings.currency.default,
+    country: '',
+    city: '',
+    offers: [],
+    track_token: crypto.randomBytes(24).toString('hex'),
+    created_at: nowIso(),
+    updated_at: nowIso()
   };
+  pushEvent(booking, 'created', {
+    id: 'customer',
+    role: 'customer',
+    full_name: booking.customer_name || 'Customer'
+  });
   data().rideBookings.unshift(booking);
+
+  // Reach every approved, active driver for this category and region.
+  const drivers = eligibleDrivers(booking);
+  for (const driver of drivers) {
+    data().notifications.unshift({
+      id: id(),
+      user_id: driver.id,
+      title: 'New booking request',
+      body: `${booking.ref}: ${booking.pickup} → ${booking.destination} (${booking.vehicle_category}).`,
+      link: '#/worker/bookings',
+      read_at: null,
+      created_at: nowIso()
+    });
+  }
+
   persist();
-  res.status(201).json({ booking });
+  res.status(201).json({
+    booking: customerBookingView(booking),
+    track_token: booking.track_token,
+    track_url: `#/track/${booking.track_token}`,
+    notified_drivers: drivers.length
+  });
+});
+
+/**
+ * The customer follows the booking with a private token: no account needed, and
+ * the token only ever exposes that one booking.
+ */
+router.get('/ride-bookings/track/:token', (req, res) => {
+  const token = String(req.params.token || '');
+  const booking = (data().rideBookings || []).find(
+    (b) => b.kind === 'customer' && b.track_token && b.track_token === token
+  );
+  if (!booking) return fail(res, 404, 'not_found', 'Booking not found.');
+  res.json({ booking: customerBookingView(booking) });
+});
+
+/** The customer compares the offers and picks the driver they prefer. */
+router.post('/ride-bookings/track/:token/select', (req, res) => {
+  const token = String(req.params.token || '');
+  const booking = (data().rideBookings || []).find(
+    (b) => b.kind === 'customer' && b.track_token && b.track_token === token
+  );
+  if (!booking) return fail(res, 404, 'not_found', 'Booking not found.');
+  if (!['created', 'offers'].includes(booking.status)) {
+    return fail(res, 409, 'wrong_stage', 'A driver has already been selected for this booking.');
+  }
+  const offerId = str((req.body || {}).offer_id, 60);
+  const offer = validOffers(booking).find((o) => o.id === offerId);
+  if (!offer) return fail(res, 404, 'offer_not_found', 'That offer is no longer available.');
+
+  booking.selected_offer_id = offer.id;
+  booking.selected_driver_id = offer.driver_id;
+  booking.selected_price = offer.price;
+  booking.selected_vehicle = offer.vehicle_name;
+  pushEvent(booking, 'selected', { id: 'customer', role: 'customer' });
+
+  // Close every other offer so only the chosen driver can act on the booking.
+  for (const other of booking.offers || []) {
+    if (other.id === offer.id || other.withdrawn) continue;
+    other.withdrawn = true;
+    other.closed_reason = 'assigned';
+    other.closed_at = nowIso();
+    data().notifications.unshift({
+      id: id(),
+      user_id: other.driver_id,
+      title: 'Booking assigned',
+      body: `${booking.ref} was assigned to another driver.`,
+      link: '#/worker/bookings',
+      read_at: null,
+      created_at: nowIso()
+    });
+  }
+
+  data().notifications.unshift({
+    id: id(),
+    user_id: offer.driver_id,
+    title: 'You were selected',
+    body: `${booking.ref}: ${booking.pickup} → ${booking.destination}. Accept to confirm.`,
+    link: '#/worker/bookings',
+    read_at: null,
+    created_at: nowIso()
+  });
+
+  persist();
+  res.json({ booking: customerBookingView(booking) });
 });
 
 router.get('/ride-bookings', requireRole('worker', 'admin'), (req, res) => {
