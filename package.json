@@ -14,6 +14,7 @@
     "test:reset": "node scripts/password-reset.test.js",
     "test:admin": "node scripts/admin-auth.test.js",
     "test:features": "node scripts/features.test.js",
+    "test:bookings": "node scripts/bookings.test.js",
     "test:invoice": "node scripts/invoice-pdf.test.js",
     "test:final": "node scripts/session-reset.test.js",
     "test:browser": "node scripts/browser.admin-commission.mjs"
