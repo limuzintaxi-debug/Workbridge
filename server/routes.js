@@ -219,6 +219,7 @@ router.post('/auth/register', (req, res) => {
       category,
       aqama_masked: maskAqama(body.aqama),
       city: str(body.city, 120),
+      country: str(body.country, 80),
       experience_years: Math.max(0, Math.min(60, num(body.experience_years, 0))),
       skills: Array.isArray(body.skills)
         ? body.skills.map((s) => str(s, 60)).filter(Boolean).slice(0, 20)
@@ -303,6 +304,7 @@ router.patch('/auth/profile', requireRole('worker', 'business'), (req, res) => {
       }
       if (body.aqama !== undefined) profile.aqama_masked = maskAqama(body.aqama);
       if (body.city !== undefined) profile.city = str(body.city, 120);
+      if (body.country !== undefined) profile.country = str(body.country, 80);
       if (body.bio !== undefined) profile.bio = str(body.bio, 1000);
       if (body.experience_years !== undefined) {
         profile.experience_years = Math.max(0, Math.min(60, num(body.experience_years, 0)));
@@ -1022,6 +1024,7 @@ router.patch('/admin/users/:id', requireRole('admin'), (req, res) => {
         profile.category = category;
       }
       if (body.city !== undefined) profile.city = str(body.city, 120);
+      if (body.country !== undefined) profile.country = str(body.country, 80);
       if (body.bio !== undefined) profile.bio = str(body.bio, 1000);
       if (body.experience_years !== undefined) {
         profile.experience_years = Math.max(0, Math.min(60, num(body.experience_years, 0)));
