@@ -255,24 +255,30 @@ await step('the customer selects a driver (deliberately not the cheapest)', asyn
   const after = await anon.get(`/api/ride-bookings/track/${token}`);
   assert.equal(after.json.booking.offers.length, 1, 'the other offers are closed');
   assert.equal(Number(after.json.booking.offers[0].price), 400);
+  assert.equal(after.json.booking.closed_offer_count, 3, 'the three losing offers are closed');
   assert.equal(after.json.booking.selected_driver.phone, '', 'contact stays hidden until acceptance');
 });
 
-await step('non-selected drivers can no longer see or act on the booking', async () => {
+await step('non-selected drivers cannot act and never receive contact details', async () => {
   const accept = await drivers[0].post(`/api/bookings/${bookingId}/accept`, {});
+  assert.equal(accept.status, 403, accept.text);
+  assert.equal(accept.json.error, 'not_selected');
+
+  // An offering driver may track the booking, but the customer's private phone
+  // number must never reach a driver who was not chosen.
+  const view = await drivers[0].get(`/api/bookings/${bookingId}`);
+  assert.equal(view.status, 200, view.text);
+  assert.equal(view.json.booking.status, 'selected');
   assert.ok(
-    [403, 404, 409].includes(accept.status),
-    `a non-selected driver must not accept (got ${accept.status})`
+    !view.text.includes(CUSTOMER.phone),
+    'a non-selected driver must not receive the customer phone number'
   );
 
-  const view = await drivers[0].get(`/api/bookings/${bookingId}`);
-  assert.ok([403, 404].includes(view.status), view.text);
-
-  const mine = await drivers[0].get('/api/bookings/driver/mine');
-  assert.equal(mine.status, 200, mine.text);
+  const available = await drivers[0].get('/api/bookings/available');
+  assert.equal(available.status, 200, available.text);
   assert.ok(
-    !mine.json.bookings.some((b) => b.id === bookingId),
-    'the closed booking must leave the other drivers\' lists'
+    !available.json.bookings.some((b) => b.id === bookingId),
+    'a selected booking is no longer open for offers'
   );
 });
 
