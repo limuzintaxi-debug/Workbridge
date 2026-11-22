@@ -47,13 +47,15 @@ const statusLabel = (status) => STATUS_LABEL[status] || status;
 const badge = (status) => `<span class="tag tag-status">${esc(statusLabel(status))}</span>`;
 const amount = (value, currency) => money(Number(value) || 0, currency || '');
 
-function progress(status) {
-  const at = STEP_ORDER.indexOf(status);
-  if (status === 'cancelled') return `<p class="muted">This booking was cancelled.</p>`;
-  return `<ol class="stage-list">${STEP_ORDER.map((step, index) => {
-    const state = index < at ? 'done' : index === at ? 'now' : 'todo';
-    return `<li class="stage-${state}">${esc(STATUS_LABEL[step])}</li>`;
-  }).join('')}</ol>`;
+/**
+ * The nine stages appear exactly once, as a single line at the top of the page.
+ * An individual booking shows only its own status badge, never the whole list
+ * again — that repeated list is what made the dashboard unreadable.
+ */
+function stageStrip() {
+  return `<p class="stage-line">${STEP_ORDER.map((step) => esc(STATUS_LABEL[step])).join(
+    ' <span aria-hidden="true">→</span> '
+  )}</p>`;
 }
 
 /**
@@ -146,7 +148,7 @@ function offersTable(booking) {
   } of ${total} received. You choose the driver — the cheapest is never assigned automatically.</p>`;
 }
 
-function paymentBlock(booking) {
+function paymentBlock(booking, options = {}) {
   if (booking.payment) {
     const pay = booking.payment;
     return `<div class="card card-flat">
@@ -161,9 +163,11 @@ function paymentBlock(booking) {
         <li><span>Payable to driver</span><b>${amount(pay.payable_amount, pay.currency)}</b></li>
       </ul>
       ${
-        booking.status === 'paid'
-          ? `<button class="btn btn-navy btn-sm" data-finalize="${esc(booking.id)}">Complete booking</button>`
-          : `<span class="tag">Booking completed</span>`
+        booking.status !== 'paid'
+          ? `<span class="tag">Booking completed</span>`
+          : options.finalizeButton === false
+            ? ''
+            : `<button class="btn btn-navy btn-sm" data-finalize="${esc(booking.id)}">Complete booking</button>`
       }
     </div>`;
   }
@@ -204,7 +208,6 @@ function businessCard(booking) {
         : ''
     }
     ${contactOf(booking, 'business')}
-    ${progress(booking.status)}
     ${paymentBlock(booking)}
     ${
       ['created', 'offers', 'selected'].includes(booking.status)
@@ -247,7 +250,8 @@ export async function businessBookingsView(ctx) {
     subtitle: 'Create a booking, compare driver offers and confirm your driver.',
     tabs,
     path: '/business/bookings',
-    body: `${form}
+    body: `${stageStrip()}
+      ${form}
       <h2 style="margin-top:24px">My bookings</h2>
       ${bookings.length ? bookings.map(businessCard).join('') : '<div class="empty">No bookings yet.</div>'}`
   });
@@ -334,26 +338,38 @@ export async function businessBookingsView(ctx) {
 
 /* ------------------------------------------------------------------- driver */
 
+/** The six driver actions, in the only order the server accepts them. */
+const DRIVER_ACTIONS = [
+  { key: 'accept', label: 'Accept Booking', from: 'selected' },
+  { key: 'pickup', label: 'Pick Up Customer', from: 'confirmed' },
+  { key: 'dropoff', label: 'Drop-off Customer', from: 'pickup' },
+  { key: 'complete-order', label: 'Order Completed', from: 'dropoff' },
+  { key: 'payment', label: 'Receive Payment', from: 'complete_order' },
+  { key: 'finalize', label: 'Booking Completed', from: 'paid' }
+];
+
+/**
+ * Driver-only action row. All six buttons are visible so the driver sees the
+ * whole sequence, but only the stage the booking has actually reached can be
+ * clicked. The server re-checks every transition, so a forced click cannot
+ * skip a step.
+ */
 function driverStageActions(booking) {
   const id = esc(booking.id);
-  if (booking.status === 'selected') {
-    return `<button class="btn btn-navy btn-sm" data-stage="accept" data-booking="${id}">Accept assignment</button>`;
+  if (booking.status === 'cancelled') {
+    return '<p class="muted" style="margin:0">This booking was cancelled.</p>';
   }
-  if (booking.status === 'confirmed') {
-    return `<button class="btn btn-navy btn-sm" data-stage="pickup" data-booking="${id}">Confirm pickup</button>`;
-  }
-  if (booking.status === 'pickup') {
-    return `<button class="btn btn-navy btn-sm" data-stage="dropoff" data-booking="${id}">Confirm drop-off</button>`;
-  }
-  if (booking.status === 'dropoff') {
-    return `<button class="btn btn-navy btn-sm" data-stage="complete-order" data-booking="${id}">Complete order</button>`;
-  }
-  if (booking.status === 'complete_order') {
-    return booking.kind === 'customer'
-      ? '<span class="tag">Record the fare you received below</span>'
-      : '<span class="tag">Waiting for the business to record payment</span>';
-  }
-  return '';
+  if (booking.status === 'completed') return '<span class="tag">Booking completed</span>';
+  const current = DRIVER_ACTIONS.findIndex((action) => action.from === booking.status);
+  return `<div class="btn-row driver-actions">${DRIVER_ACTIONS.map((action, index) => {
+    if (current > -1 && index < current) {
+      return `<span class="tag tag-done">✓ ${esc(action.label)}</span>`;
+    }
+    const active = index === current;
+    return `<button type="button" class="btn ${active ? 'btn-navy' : 'btn-ghost'} btn-sm" data-stage="${esc(
+      action.key
+    )}" data-booking="${id}"${active ? '' : ' disabled'}>${esc(action.label)}</button>`;
+  }).join('')}</div>`;
 }
 
 /** The driver's own card: confirmed banner plus every detail of the ride. */
@@ -395,9 +411,8 @@ function driverCard(booking) {
     ${booking.details ? `<p class="muted">${esc(booking.details)}</p>` : ''}
     ${booking.requirements ? `<p class="muted">Requirements: ${esc(booking.requirements)}</p>` : ''}
     ${contactOf(booking, 'driver')}
-    ${progress(booking.status)}
-    <div class="btn-row">${driverStageActions(booking)}</div>
-    ${booking.kind === 'customer' ? paymentBlock(booking) : ''}
+    ${driverStageActions(booking)}
+    ${paymentBlock(booking, { finalizeButton: false })}
   </article>`;
 }
 
@@ -408,10 +423,10 @@ function offerForm(booking) {
     <div class="grid-2">
       <div class="field"><label>Vehicle name / model</label>
         <input name="vehicle_name" maxlength="120" value="${esc(mine?.vehicle_name || '')}" required /></div>
-      <div class="field"><label>Vehicle category</label>
-        <select name="vehicle_category">
-          <option value="${esc(booking.vehicle_category)}">${esc(booking.vehicle_category)}</option>
-        </select></div>
+      <div class="field"><label>Vehicle name</label>
+        <input name="vehicle_name" maxlength="120" placeholder="GMC Yukon, Ford Taurus, Toyota Fortuner…" value="${esc(
+          mine?.vehicle_name || ''
+        )}" required /></div>
       <div class="field"><label>Your price (${esc(booking.currency)})</label>
         <input name="price" type="number" min="0" step="0.01" value="${esc(mine?.price || '')}" required /></div>
     </div>
@@ -457,7 +472,7 @@ export async function driverBookingsView(ctx) {
       subtitle: 'Offer your price on open requests and manage your assigned rides.',
       tabs,
       path: '/worker/bookings',
-      body: `<h2>Open booking requests</h2>${availableHtml}
+      body: `${stageStrip()}<h2>Open booking requests</h2>${availableHtml}
         <h2 style="margin-top:24px">My bookings</h2>${mineHtml}`
     }),
     mount: () => {
