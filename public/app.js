@@ -159,6 +159,11 @@ async function route(path, parts, query) {
   if (path === '/book-car') return ride.bookCarView(ctx);
   if (path === '/mall') return mall.mallView(ctx);
   if (path === '/admin-apply') return owner.applyView(ctx);
+  // Dedicated administrator entry points. They must resolve before the generic
+  // /(worker|business|admin)/(signin|signup) matcher so an admin never sees the
+  // public sign-in/sign-up template.
+  if (path === '/admin/signin') return pub.adminSigninView(ctx);
+  if (path === '/admin/recover') return pub.adminRecoverView(ctx);
   if (path === '/worker/ride-bookings') return guard('worker', ctx) || ride.workerRideView(ctx);
   if (path === '/agreement/new') {
     return guardAny(['worker', 'business', 'admin'], ctx) || openAgreementView(ctx);

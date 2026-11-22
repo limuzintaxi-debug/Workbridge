@@ -183,6 +183,196 @@ export async function institutionsView(ctx) {
   };
 }
 
+/* ------------------------------------------- dedicated administrator login */
+
+const ADMIN_ROLES = ['owner', 'admin'];
+
+async function ownerStatus() {
+  const fallback = {
+    owner_exists: false,
+    admin_count: 0,
+    owner_email_masked: '',
+    setup_required: false,
+    recovery_enabled: false
+  };
+  try {
+    const status = await api.get('/auth/owner-status');
+    return { ...fallback, ...(status || {}) };
+  } catch {
+    return fallback;
+  }
+}
+
+function adminNotice(status) {
+  return `<div class="notice notice-navy">
+    Administrator accounts are created by the platform owner. There is no public admin registration and no
+    admin sign-up link on this page.
+    ${
+      status.setup_required
+        ? ' No administrator exists yet — <a href="#/setup">create the administrator account</a> to enable sign-in.'
+        : ''
+    }
+  </div>`;
+}
+
+export async function adminSigninView(ctx) {
+  if (ctx.user) return { redirect: PANEL_HOME[ctx.user.role] || '#/' };
+  const status = await ownerStatus();
+  const accountHint = status.owner_exists
+    ? `<p class="muted">Owner account on file: <strong>${esc(status.owner_email_masked || 'registered owner email')}</strong>
+        ${status.admin_count ? ` · ${status.admin_count} primary admin${status.admin_count === 1 ? '' : 's'}` : ''}</p>`
+    : '<p class="muted">No Owner Admin account exists yet.</p>';
+
+  const html = `<div class="container" style="max-width:640px">
+    <div class="card">
+      <img class="auth-logo" src="/assets/logo.png?v=2" alt="WORKBRIDGE logo" width="180" height="120" />
+      <h1>Administrator sign in</h1>
+      <p class="muted">Owner Admin and Primary Admin accounts only.</p>
+      ${adminNotice(status)}
+      ${accountHint}
+      <form id="admin-signin" novalidate style="margin-top:12px">
+        <div class="field">
+          <label for="admin-email">Administrator email</label>
+          <input id="admin-email" name="email" type="email" required maxlength="160" autocomplete="username" />
+        </div>
+        <div class="field">
+          <label for="admin-password">Password</label>
+          <input id="admin-password" name="password" type="password" required autocomplete="current-password" />
+        </div>
+        <div class="notice" id="admin-signin-error" hidden></div>
+        <button class="btn btn-navy btn-block" type="submit">Sign in as administrator</button>
+      </form>
+      <div class="btn-row" style="margin-top:12px">
+        <a class="link-quiet" href="#/admin/recover">Owner password recovery</a>
+        <a class="link-quiet" href="#/">Back to home</a>
+      </div>
+    </div>
+  </div>`;
+
+  const mount = () => {
+    const form = document.getElementById('admin-signin');
+    const errorBox = document.getElementById('admin-signin-error');
+    if (!form) return;
+    const showError = (message) => {
+      if (!errorBox) return;
+      errorBox.hidden = !message;
+      errorBox.textContent = message || '';
+      errorBox.style.borderColor = '#c62828';
+      errorBox.style.color = '#c62828';
+    };
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      showError('');
+      const button = form.querySelector('button[type="submit"]');
+      const body = formObject(form);
+      busy(button, true, 'Signing in…');
+      try {
+        const res = await api.post('/auth/login', { email: body.email, password: body.password });
+        const role = res && res.user ? res.user.role : '';
+        if (!ADMIN_ROLES.includes(role)) {
+          // Never leave a worker or business session behind after an admin attempt.
+          await api.post('/auth/logout').catch(() => {});
+          ctx.setUser(null);
+          showError('That account is not an administrator. Use the Worker or Business sign-in instead.');
+          return;
+        }
+        ctx.setUser(res.user);
+        toast('Signed in as administrator');
+        location.hash = PANEL_HOME[role] || '#/admin';
+      } catch (error) {
+        showError((error && error.message) || 'Sign in failed. Check the administrator email and password.');
+      } finally {
+        busy(button, false);
+      }
+    });
+  };
+
+  return { title: 'Administrator sign in', html, mount };
+}
+
+export async function adminRecoverView(ctx) {
+  if (ctx.user) return { redirect: PANEL_HOME[ctx.user.role] || '#/' };
+  const status = await ownerStatus();
+
+  const html = `<div class="container" style="max-width:640px">
+    <div class="card">
+      <h1>Owner password recovery</h1>
+      <p class="muted">Set a new password for the Owner Admin or a Primary Admin account without depending on email delivery.</p>
+      ${
+        status.recovery_enabled
+          ? `<div class="notice notice-navy">This form requires the server setup token. It is configured in the hosting
+              environment as <code>SETUP_TOKEN</code>; ask the platform owner for its value. Every recovery is recorded in the audit log.</div>
+             <form id="owner-recover" novalidate style="margin-top:12px">
+               <div class="field">
+                 <label for="recover-email">Administrator email</label>
+                 <input id="recover-email" name="email" type="email" required maxlength="160" autocomplete="username" />
+               </div>
+               <div class="field">
+                 <label for="recover-password">New password (minimum 10 characters)</label>
+                 <input id="recover-password" name="password" type="password" required minlength="10" autocomplete="new-password" />
+               </div>
+               <div class="field">
+                 <label for="recover-confirm">Repeat new password</label>
+                 <input id="recover-confirm" name="confirm" type="password" required minlength="10" autocomplete="new-password" />
+               </div>
+               <div class="field">
+                 <label for="recover-token">Owner recovery token</label>
+                 <input id="recover-token" name="setup_token" type="password" required autocomplete="off" />
+                 <div class="hint">The token is never stored in the application and cannot be read from this page.</div>
+               </div>
+               <div class="notice" id="owner-recover-error" hidden></div>
+               <button class="btn btn-navy btn-block" type="submit">Set administrator password</button>
+             </form>`
+          : `<div class="notice">Owner recovery is disabled because the server has no setup token configured.
+              Email <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a> for help, or configure
+              <code>SETUP_TOKEN</code> in the hosting environment and reload this page.</div>`
+      }
+      <div class="btn-row" style="margin-top:12px">
+        <a class="link-quiet" href="#/admin/signin">Back to administrator sign in</a>
+      </div>
+    </div>
+  </div>`;
+
+  const mount = () => {
+    const form = document.getElementById('owner-recover');
+    if (!form) return;
+    const errorBox = document.getElementById('owner-recover-error');
+    const showError = (message) => {
+      if (!errorBox) return;
+      errorBox.hidden = !message;
+      errorBox.textContent = message || '';
+      errorBox.style.borderColor = '#c62828';
+      errorBox.style.color = '#c62828';
+    };
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      showError('');
+      const button = form.querySelector('button[type="submit"]');
+      const body = formObject(form);
+      if (body.password !== body.confirm) {
+        showError('The two passwords do not match.');
+        return;
+      }
+      busy(button, true, 'Updating…');
+      try {
+        await api.post('/auth/owner-recover', {
+          email: body.email,
+          password: body.password,
+          setup_token: body.setup_token
+        });
+        toast('Administrator password updated');
+        location.hash = '#/admin/signin';
+      } catch (error) {
+        showError((error && error.message) || 'The administrator password could not be updated.');
+      } finally {
+        busy(button, false);
+      }
+    });
+  };
+
+  return { title: 'Owner password recovery', html, mount };
+}
+
 export async function authView(ctx) {
   const role = ctx.role;
   const mode = ctx.mode;
