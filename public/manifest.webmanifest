@@ -3,7 +3,7 @@
   "short_name": "WORKBRIDGE",
   "description": "Connecting Workers, Businesses & Support Organizations. Find work, make agreements and create invoices.",
   "id": "/",
-  "start_url": "/#/",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],

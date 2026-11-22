@@ -9,7 +9,7 @@
  * fallback only, so each new deployment reaches an existing visitor on their
  * next load. /api/ is never intercepted.
  */
-const CACHE = 'workbridge-v7';
+const CACHE = 'workbridge-v8';
 
 const SHELL = [
   '/',
@@ -27,6 +27,7 @@ const SHELL = [
   '/views/admin-extras.js',
   '/views/owner.js',
   '/views/ride.js',
+  '/views/bookings.js',
   '/views/mall.js',
   '/views/docs.js',
   '/views/agreement-open.js',

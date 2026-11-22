@@ -10,6 +10,7 @@ import * as account from './views/account.js?v=23';
 import * as ride from './views/ride.js?v=23';
 import * as mall from './views/mall.js?v=23';
 import * as owner from './views/owner.js?v=23';
+import * as bookings from './views/bookings.js?v=24';
 import { openAgreementView } from './views/agreement-open.js?v=23';
 
 const state = { user: null, meta: null };
@@ -19,6 +20,7 @@ const PANEL_HOME = { worker: '#/worker', business: '#/business', admin: '#/admin
 const NAV = {
   worker: [
     ['#/worker', 'nav.dashboard'],
+    ['#/worker/bookings', 'Bookings'],
     ['#/worker/jobs', 'nav.findWork'],
     ['#/worker/applications', 'nav.applications'],
     ['#/worker/agreements', 'nav.agreements'],
@@ -30,6 +32,7 @@ const NAV = {
   ],
   business: [
     ['#/business', 'nav.dashboard'],
+    ['#/business/bookings', 'Book a Car'],
     ['#/business/jobs', 'nav.listings'],
     ['#/business/jobs/new', 'nav.postWork'],
     ['#/business/workers', 'nav.workers'],
@@ -43,6 +46,8 @@ const NAV = {
   admin: [
     ['#/admin', 'nav.overview'],
     ['#/admin/users', 'nav.users'],
+    ['#/admin/drivers', 'Drivers'],
+    ['#/admin/bookings', 'Bookings & Payments'],
     ['#/admin/institutions', 'nav.institutions'],
     ['#/admin/listings', 'nav.listings'],
     ['#/admin/documents', 'nav.documents'],
@@ -55,6 +60,7 @@ const NAV = {
   owner: [
     ['#/owner', 'Applications'],
     ['#/owner/admins', 'Admins'],
+    ['#/owner/platform', 'Platform'],
     ['#/admin', 'Primary Admin']
   ]
 };
@@ -151,7 +157,12 @@ function guardAny(roles, ctx) {
 async function route(path, parts, query) {
   const ctx = ctxFor(parts, query);
 
-  if (path === '/') return pub.homeView(ctx);
+  // An authenticated user — including someone opening the installed app icon —
+  // lands on their own dashboard instead of the public landing page.
+  if (path === '/') {
+    if (state.user) return { redirect: PANEL_HOME[state.user.role] || '#/worker' };
+    return pub.homeView(ctx);
+  }
   if (path === '/support') return pub.supportView(ctx);
   if (path === '/institutions') return pub.institutionsView(ctx);
   if (path === '/reset-password') return account.resetPasswordView(ctx);
@@ -165,6 +176,13 @@ async function route(path, parts, query) {
   if (path === '/admin/signin') return pub.adminSigninView(ctx);
   if (path === '/admin/recover') return pub.adminRecoverView(ctx);
   if (path === '/worker/ride-bookings') return guard('worker', ctx) || ride.workerRideView(ctx);
+  // Booking system, one view per panel. Declared before the generic panel
+  // matcher so these paths never fall through to the default panel view.
+  if (path === '/business/bookings') return guard('business', ctx) || bookings.businessBookingsView(ctx);
+  if (path === '/worker/bookings') return guard('worker', ctx) || bookings.driverBookingsView(ctx);
+  if (path === '/admin/drivers') return guard('admin', ctx) || bookings.adminDriversView(ctx);
+  if (path === '/admin/bookings') return guard('admin', ctx) || bookings.adminBookingsView(ctx);
+  if (path === '/owner/platform') return guard('owner', ctx) || bookings.ownerPlatformView(ctx);
   if (path === '/agreement/new') {
     return guardAny(['worker', 'business', 'admin'], ctx) || openAgreementView(ctx);
   }
