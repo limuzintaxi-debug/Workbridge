@@ -420,11 +420,12 @@ try {
       offer_id: selectedOffer.id
     });
     assert.equal(select.status, 200, select.text);
-    assert.equal(select.json.booking.status, 'selected');
+    // Selecting a driver confirms the booking immediately — no separate accept step.
+    assert.equal(select.json.booking.status, 'confirmed');
 
     const asDriver = await drivers[selectedDriverIndex].get(`/api/bookings/${bookingId}`);
     assert.equal(asDriver.status, 200, asDriver.text);
-    assert.equal(asDriver.json.booking.status, 'selected');
+    assert.equal(asDriver.json.booking.status, 'confirmed');
     const businessContact = asDriver.json.booking.business;
     assert.ok(
       businessContact && businessContact.phone,
@@ -465,7 +466,8 @@ try {
     assert.equal(earlyPayment.status, 409, earlyPayment.text);
   });
 
-  await step('acceptance confirms the booking and unlocks both contact numbers', async () => {
+  await step('selection already confirmed the booking and unlocked both contacts', async () => {
+    // Acceptance stays idempotent for any client that still sends it.
     const accept = await drivers[selectedDriverIndex].post(`/api/bookings/${bookingId}/accept`, {});
     assert.equal(accept.status, 200, accept.text);
     assert.equal(accept.json.booking.status, 'confirmed');
@@ -725,12 +727,7 @@ try {
 
     const select = await business.post(`/api/bookings/${secondId}/select`, { offer_id: myOffer.id });
     assert.equal(select.status, 200, select.text);
-    assert.equal(select.json.booking.status, 'selected');
-
-    // "Accept Booking"
-    const accept = await drivers[selectedDriverIndex].post(`/api/bookings/${secondId}/accept`, {});
-    assert.equal(accept.status, 200, accept.text);
-    assert.equal(accept.json.booking.status, 'confirmed');
+    assert.equal(select.json.booking.status, 'confirmed', 'selection confirms the booking');
 
     // "Pick Up Customer" → "Drop-off Customer" → "Order Completed"
     for (const [path, expected] of [
@@ -787,15 +784,21 @@ try {
     assert.ok(!businessCard.includes('progress('), 'no stage list inside a business booking');
     assert.ok(!businessCard.includes('stage-list'), 'no numbered stage list under a booking');
     assert.ok(!businessCard.includes('data-stage'), 'action buttons stay out of the business dashboard');
-    assert.ok(src.includes('function stageStrip'), 'the stages are shown once as a single line');
-    assert.ok(src.includes('${stageStrip()}'), 'the stage strip is placed on the dashboard');
+    assert.ok(src.includes('function stageStrip'), 'the business dashboard keeps one compact status line');
+    assert.ok(src.includes('${stageStrip()}'), 'the status line is placed on the business dashboard');
+
+    // The driver dashboard replaced the list with real action buttons.
+    const driverStart = src.indexOf('export async function driverBookingsView');
+    const driverNext = src.indexOf('export async function', driverStart + 10);
+    const driverView = src.slice(driverStart, driverNext === -1 ? undefined : driverNext);
+    assert.ok(driverView.length > 200, 'the driver view template is present');
+    assert.ok(!driverView.includes('stageStrip()'), 'no stage list on the driver dashboard');
 
     // The driver action labels live in DRIVER_ACTIONS and are rendered by
     // driverStageActions, which driverCard calls — assert across that whole block.
     const driverCard = src.slice(src.indexOf('const DRIVER_ACTIONS'), src.indexOf('function offerForm'));
     assert.ok(driverCard.includes('driverStageActions(booking)'), 'the driver card renders the actions');
     for (const label of [
-      'Accept Booking',
       'Pick Up Customer',
       'Drop-off Customer',
       'Order Completed',
@@ -804,6 +807,7 @@ try {
     ]) {
       assert.ok(driverCard.includes(label), `driver action missing: ${label}`);
     }
+    assert.ok(!driverCard.includes('Accept Booking'), 'no separate accept step remains');
     assert.ok(!driverCard.includes('progress('), 'the driver card does not repeat the stage list');
   });
 
