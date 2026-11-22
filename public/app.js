@@ -1,16 +1,16 @@
-import { api } from './api.js?v=22';
-import { esc, setDefaultCurrency } from './ui.js?v=22';
-import { t, initLang, langSwitcher, bindLangSwitcher } from './i18n.js?v=22';
-import * as pub from './views/public.js?v=22';
-import * as worker from './views/worker.js?v=22';
-import * as business from './views/business.js?v=22';
-import * as admin from './views/admin.js?v=22';
-import * as docs from './views/docs.js?v=22';
-import * as account from './views/account.js?v=22';
-import * as ride from './views/ride.js?v=22';
-import * as mall from './views/mall.js?v=22';
-import * as owner from './views/owner.js?v=22';
-import { openAgreementView } from './views/agreement-open.js?v=22';
+import { api } from './api.js?v=23';
+import { esc, setDefaultCurrency } from './ui.js?v=23';
+import { t, initLang, langSwitcher, bindLangSwitcher } from './i18n.js?v=23';
+import * as pub from './views/public.js?v=23';
+import * as worker from './views/worker.js?v=23';
+import * as business from './views/business.js?v=23';
+import * as admin from './views/admin.js?v=23';
+import * as docs from './views/docs.js?v=23';
+import * as account from './views/account.js?v=23';
+import * as ride from './views/ride.js?v=23';
+import * as mall from './views/mall.js?v=23';
+import * as owner from './views/owner.js?v=23';
+import { openAgreementView } from './views/agreement-open.js?v=23';
 
 const state = { user: null, meta: null };
 

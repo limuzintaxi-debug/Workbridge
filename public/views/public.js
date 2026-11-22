@@ -307,7 +307,10 @@ export async function authView(ctx) {
           }
           ctx.setUser(res.user);
           toast(isSignup ? 'Account created' : 'Signed in', 'success');
-          location.hash = PANEL_HOME[role];
+          // Redirect by the role that was actually authenticated, not by the
+          // route that submitted the form: the owner signs in through
+          // #/admin/signin but belongs on the separate Owner panel.
+          location.hash = PANEL_HOME[(res.user && res.user.role) || role] || PANEL_HOME[role];
           await ctx.refresh();
         } catch (error) {
           toast(error.message, 'error');
