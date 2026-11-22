@@ -160,6 +160,8 @@ try {
       country: 'United Arab Emirates'
     });
     assert.equal(w.status, 201, w.text);
+    const workerMe = await worker.get('/api/auth/me');
+    workerId = workerMe.json.user.id;
 
     const w2 = await worker2.post('/api/auth/register', {
       role: 'worker',
@@ -202,6 +204,7 @@ try {
   /* --------------------------------------------------- owner / admin scope */
 
   let regionalAdminId = null;
+  let workerId = null;
 
   await step('anyone can apply for admin access and it waits for the owner', async () => {
     const applied = await anon.post('/api/admin-applications', {
@@ -274,12 +277,9 @@ try {
 
   /* ---------------------------------------------------------- ride booking */
 
-  let workerId = null;
   let bookingId = null;
 
   await step('an ordinary worker never receives ride bookings', async () => {
-    const me = await worker.get('/api/auth/me');
-    workerId = me.json.user.id;
 
     const list = await worker.get('/api/ride-bookings');
     assert.equal(list.status, 403, 'ride booking must be off until the admin enables it');

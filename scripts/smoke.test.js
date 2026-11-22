@@ -354,7 +354,7 @@ try {
       password: 'Admin#12345'
     });
     assert.equal(login.status, 200, login.text);
-    assert.equal(login.json.user.role, 'admin');
+    assert.equal(login.json.user.role, 'owner', 'the bootstrap administrator is the platform owner');
 
     const approve = await admin.patch(`/api/admin/institutions/${institutionId}`, { status: 'approved' });
     assert.equal(approve.status, 200, approve.text);
