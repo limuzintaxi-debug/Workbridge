@@ -530,6 +530,22 @@ try {
     for (const expected of ['created', 'selected', 'confirmed', 'pickup', 'dropoff', 'complete_order', 'paid', 'completed']) {
       assert.ok(stages.includes(expected), `missing recorded stage: ${expected}`);
     }
+
+    // Completing the booking withdraws the phone numbers from the business
+    // dashboard as well, while the record and payment stay readable.
+    assert.equal(booking.contact_hidden, true, 'the business view flags the removal');
+    assert.ok(!booking.driver?.phone, 'the driver phone is removed from the business dashboard');
+    assert.ok(!booking.customer?.phone, 'the customer phone is removed from the business dashboard');
+    assert.ok(booking.ref, 'the booking reference is kept');
+    assert.ok(booking.selected_price, 'the agreed price is kept');
+    assert.ok(booking.payment?.amount, 'the payment record is kept');
+
+    const driverDone = await drivers[selectedDriverIndex].get(`/api/bookings/${bookingId}`);
+    assert.ok(
+      !driverDone.json.booking.business?.phone,
+      'the business phone is removed from the driver dashboard'
+    );
+    assert.ok(driverDone.json.booking.ref, 'the driver keeps the booking record');
   });
 
   await step('commission is recorded for the owner and scoped for admins', async () => {
