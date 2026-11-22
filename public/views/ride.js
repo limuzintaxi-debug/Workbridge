@@ -80,6 +80,19 @@ export function bookCarView() {
         category.value = '';
       });
 
+      function showTrackingLink(result) {
+        document.getElementById('ride-track')?.remove();
+        const card = document.createElement('div');
+        card.id = 'ride-track';
+        card.className = 'card';
+        card.style.marginTop = '16px';
+        card.innerHTML = `<h3 style="margin-top:0">Booking ${esc(result.booking.ref)} sent</h3>
+          <p class="muted">${result.notified_drivers || 0} driver(s) were notified. Open this link to compare their offers and choose your driver.</p>
+          <p style="margin:0"><a class="btn btn-navy btn-sm" href="#/track/${esc(result.track_token)}">View offers &amp; choose driver</a></p>
+          <p class="muted" style="margin:8px 0 0">Keep this link private — anyone with it can see this booking.</p>`;
+        form.parentElement?.appendChild(card);
+      }
+
       form.addEventListener('submit', async (event) => {
         event.preventDefault();
         const submit = form.querySelector('button[type="submit"]');
@@ -95,12 +108,113 @@ export function bookCarView() {
           toast(`Booking sent. Reference ${result.booking.ref}`, 'ok');
           form.reset();
           form.hidden = true;
+          showTrackingLink(result);
         } catch (error) {
           toast(error.message, 'error');
         } finally {
           busy(submit, false);
         }
       });
+    }
+  };
+}
+
+/**
+ * Private customer tracking page. The token identifies one booking, so a
+ * customer without an account can watch offers arrive, compare prices and pick
+ * the driver they prefer. Choosing a driver closes every other offer.
+ */
+export function trackBookingView(ctx, token) {
+  const safeToken = encodeURIComponent(token);
+  const stages = ['created', 'offers', 'selected', 'confirmed', 'pickup', 'dropoff', 'complete_order', 'paid', 'completed'];
+  return {
+    title: 'Track booking',
+    html: `<div class="container"><div id="track-root"><p class="muted">Loading your booking…</p></div></div>`,
+    async mount() {
+      const root = document.getElementById('track-root');
+      if (!root) return;
+
+      const load = async () => {
+        const { booking } = await api.get(`/ride-bookings/track/${safeToken}`);
+        const offers = booking.offers || [];
+        const canChoose = ['created', 'offers'].includes(booking.status) && offers.length > 0;
+        const driverName = (offer) => offer.driver_name || (offer.driver && offer.driver.name) || 'Driver';
+        root.innerHTML = `
+          <div class="section-head">
+            <div>
+              <h1>BOOKING ${esc(booking.ref)}</h1>
+              <p class="muted" style="margin:0">${esc(booking.status_label)} · ${esc(booking.vehicle_category)}</p>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm" id="track-refresh">Refresh</button>
+          </div>
+          <div class="card">
+            <p style="margin:0 0 6px"><strong>${esc(booking.pickup)}</strong> → ${esc(booking.destination)}</p>
+            <p class="muted" style="margin:0">${esc(booking.date || '')} ${esc(booking.time || '')}</p>
+            ${booking.details ? `<p class="muted" style="margin:8px 0 0">${esc(booking.details)}</p>` : ''}
+          </div>
+          <div class="card" style="margin-top:12px">
+            <h3 style="margin-top:0">Driver offers</h3>
+            ${
+              offers.length
+                ? `<div class="table-wrap"><table class="table"><thead><tr><th>Driver</th><th>Vehicle</th><th>Category</th><th>Price</th><th></th></tr></thead><tbody>
+                    ${offers
+                      .map(
+                        (offer) => `<tr>
+                          <td>${esc(driverName(offer))}</td>
+                          <td>${esc(offer.vehicle_name || '')}</td>
+                          <td>${esc(offer.vehicle_category || '')}</td>
+                          <td>${esc(String(offer.price))} ${esc(booking.currency || '')}</td>
+                          <td>${canChoose ? `<button type="button" class="btn btn-navy btn-sm" data-select-offer="${esc(offer.id)}">Choose</button>` : ''}</td>
+                        </tr>`
+                      )
+                      .join('')}
+                  </tbody></table></div>`
+                : `<p class="muted" style="margin:0">No offers yet. ${booking.eligible_driver_count || 0} eligible driver(s) were notified — offers appear here as they arrive.</p>`
+            }
+            ${canChoose ? `<p class="muted" style="margin:8px 0 0">Choose the driver you prefer. The other offers are closed automatically.</p>` : ''}
+          </div>
+          ${
+            booking.selected_driver
+              ? `<div class="card" style="margin-top:12px">
+                  <h3 style="margin-top:0">Selected driver</h3>
+                  <p style="margin:0">${esc(booking.selected_driver.name)} · ${esc(booking.selected_driver.vehicle_name || '')}</p>
+                  <p class="muted" style="margin:4px 0 0">${booking.selected_driver.phone ? `Phone: ${esc(booking.selected_driver.phone)}` : 'Contact details unlock as soon as the driver accepts.'}</p>
+                </div>`
+              : ''
+          }
+          <div class="card" style="margin-top:12px">
+            <h3 style="margin-top:0">Progress</h3>
+            <ol class="muted" style="margin:0;padding-left:18px">
+              ${stages.map((stage) => `<li>${esc(stage.replace(/_/g, ' '))}</li>`).join('')}
+            </ol>
+          </div>`;
+
+        document.getElementById('track-refresh')?.addEventListener('click', () => {
+          load().catch((error) => toast(error.message, 'error'));
+        });
+
+        for (const button of root.querySelectorAll('[data-select-offer]')) {
+          button.addEventListener('click', async () => {
+            busy(button, true, 'Choosing…');
+            try {
+              await api.post(`/ride-bookings/track/${safeToken}/select`, {
+                offer_id: button.dataset.selectOffer
+              });
+              toast('Driver selected. Waiting for their confirmation.', 'ok');
+              await load();
+            } catch (error) {
+              toast(error.message, 'error');
+              busy(button, false);
+            }
+          });
+        }
+      };
+
+      try {
+        await load();
+      } catch (error) {
+        root.innerHTML = `<div class="card"><p class="muted">${esc(error.message)}</p><a class="btn btn-ghost btn-sm" href="#/book-car">Back to Book Your Car</a></div>`;
+      }
     }
   };
 }
