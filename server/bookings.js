@@ -281,9 +281,10 @@ export function customerBookingView(booking) {
   let selectedDriver = null;
   if (booking.selected_driver_id) {
     const record = driverRecord(booking.selected_driver_id);
+    const driverUser = record?.user || null;
     selectedDriver = {
-      name: record?.full_name || record?.name || 'Selected driver',
-      phone: unlocked ? record?.phone || '' : '',
+      name: driverUser?.full_name || driverUser?.name || 'Selected driver',
+      phone: unlocked ? driverUser?.phone || '' : '',
       vehicle_name: booking.selected_vehicle || '',
       price: booking.selected_price || 0
     };
