@@ -421,8 +421,6 @@ function offerForm(booking) {
   return `<form class="card card-flat" data-offer-form="${esc(booking.id)}">
     <h4>Your offer</h4>
     <div class="grid-2">
-      <div class="field"><label>Vehicle name / model</label>
-        <input name="vehicle_name" maxlength="120" value="${esc(mine?.vehicle_name || '')}" required /></div>
       <div class="field"><label>Vehicle name</label>
         <input name="vehicle_name" maxlength="120" placeholder="GMC Yukon, Ford Taurus, Toyota Fortuner…" value="${esc(
           mine?.vehicle_name || ''
