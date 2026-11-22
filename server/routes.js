@@ -10,6 +10,7 @@ import {
   requireRole
 } from './security.js';
 import { publicUser, profileFor } from './middleware.js';
+import { persistenceDriver, supabaseConfigured } from './supabase.js';
 import { inScope } from './scope.js';
 import {
   CATEGORIES,
@@ -146,7 +147,16 @@ function invoiceView(invoice) {
 /* --------------------------------------------------------------------- meta */
 
 router.get('/health', (req, res) => {
-  res.json({ ok: true, service: 'workbridge', time: nowIso() });
+  res.json({
+    ok: true,
+    service: 'workbridge',
+    time: nowIso(),
+    // Tells an operator whether accounts and bookings are being written to the
+    // permanent database or only to this container's temporary file.
+    persistence: persistenceDriver(),
+    supabase_configured: supabaseConfigured(),
+    permanent_storage: persistenceDriver() === 'supabase'
+  });
 });
 
 router.get('/meta', (req, res) => {
