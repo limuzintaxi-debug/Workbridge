@@ -10,6 +10,7 @@ import {
   requireRole
 } from './security.js';
 import { publicUser, profileFor } from './middleware.js';
+import { inScope } from './scope.js';
 import {
   CATEGORIES,
   INSTITUTION_TYPES,
@@ -936,8 +937,15 @@ router.get('/admin/overview', requireRole('admin'), (req, res) => {
 router.get('/admin/users', requireRole('admin'), (req, res) => {
   const db = data();
   const role = str(req.query.role, 20);
-  let users = db.users.filter((u) => u.role !== 'admin');
+  // The owner account is never listed to an admin, and admins cannot see other
+  // administrators either: only the owner sees administrator accounts.
+  let users = db.users.filter((u) => u.role === 'worker' || u.role === 'business');
   if (role) users = users.filter((u) => u.role === role);
+  // Regional admins only see accounts inside their assigned country/city.
+  users = users.filter((u) => {
+    const profile = profileFor(u) || {};
+    return inScope(req.user, { country: profile.country, city: profile.city });
+  });
   const rows = users.map((u) => ({
     ...publicUser(u, profileFor(u)),
     profile: profileFor(u) || null,
@@ -949,9 +957,29 @@ router.get('/admin/users', requireRole('admin'), (req, res) => {
 
 router.patch('/admin/users/:id', requireRole('admin'), (req, res) => {
   const db = data();
-  const user = db.users.find((u) => u.id === req.params.id && u.role !== 'admin');
-  if (!user) return fail(res, 404, 'not_found', 'Account not found.');
+  const target = db.users.find((u) => u.id === req.params.id);
+  if (!target) return fail(res, 404, 'not_found', 'Account not found.');
+  // Hard stops, enforced here rather than by hiding buttons: an admin may never
+  // touch the owner, another admin, or their own administrator record.
+  if (target.role === 'owner') {
+    return fail(res, 403, 'owner_protected', 'The owner account cannot be accessed by an admin.');
+  }
+  if (target.role === 'admin') {
+    return fail(res, 403, 'admin_protected', 'Admins cannot manage administrator accounts.');
+  }
+  if (target.role !== 'worker' && target.role !== 'business') {
+    return fail(res, 403, 'forbidden', 'This account cannot be managed here.');
+  }
+  const targetProfile = profileFor(target) || {};
+  if (!inScope(req.user, { country: targetProfile.country, city: targetProfile.city })) {
+    return fail(res, 403, 'out_of_scope', 'This account is outside your assigned area.');
+  }
+  const user = target;
   const body = req.body || {};
+  // An admin cannot promote anyone, change roles or widen their own authority.
+  if (body.role !== undefined || body.admin_scope !== undefined) {
+    return fail(res, 403, 'forbidden', 'Role and permission changes require the owner.');
+  }
 
   const status = str(body.status, 20);
   if (status) {
