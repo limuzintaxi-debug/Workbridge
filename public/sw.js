@@ -1,4 +1,4 @@
-/* WORKBRIDGE service worker — v7.
+/* WORKBRIDGE service worker — v9.
  *
  * Why this file matters: the previous version (v6) served /app.js and
  * /views/*.js CACHE-FIRST and was itself never changed, so a returning browser
@@ -9,7 +9,7 @@
  * fallback only, so each new deployment reaches an existing visitor on their
  * next load. /api/ is never intercepted.
  */
-const CACHE = 'workbridge-v8';
+const CACHE = 'workbridge-v9';
 
 const SHELL = [
   '/',
@@ -37,6 +37,11 @@ const SHELL = [
   '/assets/icon-192.png?v=2',
   '/assets/icon-512.png?v=2',
   '/assets/icon-maskable-512.png?v=2',
+  '/assets/apple-touch-icon-152.png?v=2',
+  '/assets/apple-touch-icon-167.png?v=2',
+  '/assets/splash-1170x2532.png',
+  '/assets/splash-1284x2778.png',
+  '/assets/splash-1125x2436.png',
   '/manifest.webmanifest'
 ];
 
