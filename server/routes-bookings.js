@@ -621,4 +621,19 @@ router.patch('/owner/admins/:id/access', requireRole('owner'), (req, res) => {
   });
 });
 
+/** Owner-only list of administrators. The owner account itself is never included. */
+router.get('/owner/admins/list', requireRole('owner'), (req, res) => {
+  const admins = data()
+    .users.filter((u) => u.role === 'admin')
+    .map((u) => ({
+      id: u.id,
+      full_name: u.full_name,
+      email: u.email,
+      status: u.status,
+      admin_scope: u.admin_scope || { level: 'none' },
+      created_at: u.created_at
+    }));
+  res.json({ admins });
+});
+
 export default router;
