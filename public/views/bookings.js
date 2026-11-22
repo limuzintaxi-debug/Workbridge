@@ -526,10 +526,23 @@ export async function driverBookingsView(ctx) {
 
       for (const button of document.querySelectorAll('[data-stage]')) {
         button.addEventListener('click', async () => {
+          const stage = button.dataset.stage;
+          const bookingId = button.dataset.booking;
+          // "Receive Payment" opens the payment form: the driver records the
+          // amount actually collected, and the booking reaches 'paid'.
+          if (stage === 'payment') {
+            const form = document.querySelector(`[data-pay-form="${bookingId}"]`);
+            const amountInput = form?.querySelector('input[name=amount]');
+            form?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            amountInput?.focus();
+            amountInput?.select?.();
+            toast('Enter the amount you received to finish the booking.');
+            return;
+          }
           button.disabled = true;
           try {
-            await api.post(`/bookings/${button.dataset.booking}/${button.dataset.stage}`, {});
-            toast('Booking updated.');
+            await api.post(`/bookings/${bookingId}/${stage}`, {});
+            toast(stage === 'finalize' ? 'Booking completed.' : 'Booking updated.');
             ctx.refresh();
           } catch (error) {
             toast(error.message, true);
