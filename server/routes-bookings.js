@@ -342,8 +342,16 @@ router.post('/bookings/:id/accept', requireRole('worker'), (req, res) => {
     return fail(res, 403, 'not_selected', 'You were not selected for this booking.');
   }
   // Selection now confirms the booking, so acceptance stays idempotent for any
-  // client or record that still sends it.
-  if (booking.status === 'confirmed') {
+  // client or record that still sends it — including rides already under way.
+  const CONFIRMED_OR_LATER = [
+    'confirmed',
+    'pickup',
+    'dropoff',
+    'complete_order',
+    'paid',
+    'completed'
+  ];
+  if (CONFIRMED_OR_LATER.includes(booking.status)) {
     return res.json({ booking: bookingView(booking, req.user) });
   }
   if (booking.status !== 'selected') {
