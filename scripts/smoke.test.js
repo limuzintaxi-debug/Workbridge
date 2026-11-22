@@ -94,7 +94,14 @@ async function waitForServer(timeoutMs = 30000) {
 }
 
 const server = spawn(process.execPath, ['server/index.js'], {
-  env: { ...process.env, PORT: String(PORT), DATA_DIR, SESSION_SECRET: 'test-secret-value-0123456789' },
+  env: {
+    ...process.env,
+    PORT: String(PORT),
+    DATA_DIR,
+    SESSION_SECRET: 'test-secret-value-0123456789',
+    // Deterministic first-run setup: ignore any SETUP_TOKEN from the host env.
+    SETUP_TOKEN: ''
+  },
   stdio: ['ignore', 'pipe', 'pipe']
 });
 server.stdout.on('data', () => {});
