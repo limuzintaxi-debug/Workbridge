@@ -790,7 +790,10 @@ try {
     assert.ok(src.includes('function stageStrip'), 'the stages are shown once as a single line');
     assert.ok(src.includes('${stageStrip()}'), 'the stage strip is placed on the dashboard');
 
-    const driverCard = src.slice(src.indexOf('function driverCard'), src.indexOf('function offerForm'));
+    // The driver action labels live in DRIVER_ACTIONS and are rendered by
+    // driverStageActions, which driverCard calls — assert across that whole block.
+    const driverCard = src.slice(src.indexOf('const DRIVER_ACTIONS'), src.indexOf('function offerForm'));
+    assert.ok(driverCard.includes('driverStageActions(booking)'), 'the driver card renders the actions');
     for (const label of [
       'Accept Booking',
       'Pick Up Customer',
