@@ -524,7 +524,9 @@ export function resetForTests() {
 export const storeInfo = () => ({
   driver: persistenceDriver(),
   auth_driver: persistenceDriver() === 'supabase' && config.supabaseAnonKey ? 'supabase-auth' : 'local',
-  file: persistenceDriver() === 'local-json' ? DB_FILE : null,
+  // Always reported: this is the local cache file the app writes on every change,
+  // and the only copy of the data while the database rejects writes.
+  file: DB_FILE,
   sync: { ...syncStatus },
   initialised_at: nowIso()
 });
