@@ -478,6 +478,39 @@ export async function driverBookingsView(ctx) {
         });
       }
 
+      // A public "Book Your Car" booking has no business account, so its chosen
+      // driver records the fare received and then completes the booking.
+      for (const payForm of document.querySelectorAll('[data-pay-form]')) {
+        payForm.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          const payload = Object.fromEntries(new FormData(payForm).entries());
+          const submit = payForm.querySelector('button[type=submit]');
+          submit.disabled = true;
+          try {
+            await api.post(`/bookings/${payForm.dataset.payForm}/payment`, payload);
+            toast('Payment recorded.');
+            ctx.refresh();
+          } catch (error) {
+            toast(error.message, true);
+            submit.disabled = false;
+          }
+        });
+      }
+
+      for (const button of document.querySelectorAll('[data-finalize]')) {
+        button.addEventListener('click', async () => {
+          button.disabled = true;
+          try {
+            await api.post(`/bookings/${button.dataset.finalize}/finalize`, {});
+            toast('Booking completed.');
+            ctx.refresh();
+          } catch (error) {
+            toast(error.message, true);
+            button.disabled = false;
+          }
+        });
+      }
+
       for (const button of document.querySelectorAll('[data-stage]')) {
         button.addEventListener('click', async () => {
           button.disabled = true;
