@@ -271,7 +271,10 @@ await step('the customer selects a driver (deliberately not the cheapest)', asyn
   assert.equal(after.json.booking.offers.length, 1, 'the other offers are closed');
   assert.equal(Number(after.json.booking.offers[0].price), 400);
   assert.equal(after.json.booking.closed_offer_count, 3, 'the three losing offers are closed');
-  assert.equal(after.json.booking.selected_driver.phone, '', 'contact stays hidden until acceptance');
+  assert.ok(
+    after.json.booking.selected_driver.phone,
+    'the chosen driver contact is shared as soon as the customer selects them'
+  );
 });
 
 await step('non-selected drivers cannot act and never receive contact details', async () => {
