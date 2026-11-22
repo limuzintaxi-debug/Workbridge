@@ -159,6 +159,18 @@ await step('owner setup, a global admin, and ride booking enabled', async () => 
   assert.equal(enabled.json.enabled, true);
 });
 
+await step('the public booking flag is open while admin settings stay protected', async () => {
+  const open = await anon.get('/api/ride-bookings/open');
+  assert.equal(open.status, 200, open.text);
+  assert.equal(open.json.open, true);
+  assert.deepEqual(open.json.categories, ['Small Car', 'Go', 'Business', 'VIP']);
+  assert.equal(open.json.workers, undefined, 'the public flag never exposes worker data');
+
+  // The admin settings endpoint stays behind the admin role: 401 without a session.
+  const settings = await anon.get('/api/ride-booking/settings');
+  assert.equal(settings.status, 401, settings.text);
+});
+
 await step('four separate drivers register in Riyadh and admin approves them for VIP', async () => {
   for (let i = 0; i < 4; i += 1) {
     const reg = await drivers[i].post('/api/auth/register', {
