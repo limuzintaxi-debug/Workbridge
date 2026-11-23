@@ -45,7 +45,13 @@ const STEP_ORDER = [
 
 const statusLabel = (status) => STATUS_LABEL[status] || status;
 const badge = (status) => `<span class="tag tag-status">${esc(statusLabel(status))}</span>`;
-const amount = (value, currency) => money(Number(value) || 0, currency || '');
+const amount = (value, currency) =>
+  money(
+    Number(
+      value && typeof value === 'object' ? value.price ?? value.amount ?? value.value ?? 0 : value
+    ) || 0,
+    currency || ''
+  );
 
 /**
  * The nine stages appear exactly once, as a single line at the top of the page.
@@ -88,10 +94,8 @@ function contactOf(booking, omit) {
     omit === 'driver' ? '' : contactBox('Driver', booking.driver),
     omit === 'business' ? '' : contactBox('Business', booking.business)
   ].join('');
-  const note = booking.contact_hidden
-    ? `<p class="muted">Contact numbers were removed because this booking is completed. The booking record, dates, prices and payment details are kept.</p>`
-    : '';
-  return blocks || note ? `<div class="contact-wrap">${blocks}${note}</div>` : '';
+  // Completed bookings simply stop showing numbers; no explanatory note.
+  return blocks ? `<div class="contact-wrap">${blocks}</div>` : '';
 }
 
 function offersOf(booking) {
@@ -155,12 +159,12 @@ function paymentBlock(booking, options = {}) {
       <h4>Payment recorded</h4>
       <p class="muted" style="margin:4px 0">Reference ${esc(pay.reference)} · ${esc(pay.method || '')}</p>
       <ul class="money-list">
-        <li><span>Total received</span><b>${amount(pay.amount, pay.currency)}</b></li>
-        <li><span>Platform commission (${Number(pay.commission_rate) || 0}%)</span><b>${amount(
+        <li><span>Total received from customer</span><b>${amount(pay.amount, pay.currency)}</b></li>
+        <li><span>Paid to driver (full amount)</span><b>${amount(pay.payable_amount, pay.currency)}</b></li>
+        <li><span>Platform commission (${Number(pay.commission_rate) || 0}% — recorded separately, not deducted)</span><b>${amount(
           pay.commission_amount,
           pay.currency
         )}</b></li>
-        <li><span>Payable to driver</span><b>${amount(pay.payable_amount, pay.currency)}</b></li>
       </ul>
       ${
         booking.status !== 'paid'
@@ -201,6 +205,13 @@ function businessCard(booking) {
     ${booking.details ? `<p class="muted">${esc(booking.details)}</p>` : ''}
     ${booking.requirements ? `<p class="muted">Requirements: ${esc(booking.requirements)}</p>` : ''}
     ${booking.selected_price ? `<p><b>Agreed price:</b> ${amount(booking.selected_price, booking.currency)}</p>` : ''}
+    ${
+      booking.selected_driver_name || booking.selected_vehicle
+        ? `<p class="muted">Driver: ${esc(booking.selected_driver_name || 'Assigned driver')}${
+            booking.selected_vehicle ? ` — ${esc(booking.selected_vehicle)}` : ''
+          }</p>`
+        : ''
+    }
     ${['created', 'offers'].includes(booking.status) ? offersTable(booking) : ''}
     ${
       booking.status === 'selected'
@@ -344,6 +355,7 @@ export async function businessBookingsView(ctx) {
  * separate acceptance step.
  */
 const DRIVER_ACTIONS = [
+  { key: 'accept', label: 'Confirm Booking', from: 'selected' },
   { key: 'pickup', label: 'Pick Up Customer', from: 'confirmed' },
   { key: 'dropoff', label: 'Drop-off Customer', from: 'pickup' },
   { key: 'complete-order', label: 'Order Completed', from: 'dropoff' },
@@ -363,8 +375,9 @@ function driverStageActions(booking) {
     return '<p class="muted" style="margin:0">This booking was cancelled.</p>';
   }
   if (booking.status === 'completed') return '<span class="tag">Booking completed</span>';
-  // Records saved before selection auto-confirmed are treated as confirmed.
-  const stage = booking.status === 'selected' ? 'confirmed' : booking.status;
+  // The booking waits at 'selected' until this driver confirms it, then follows
+  // the stage order the server enforces.
+  const stage = booking.status;
   const current = DRIVER_ACTIONS.findIndex((action) => action.from === stage);
   return `<div class="btn-row driver-actions">${DRIVER_ACTIONS.map((action, index) => {
     if (current > -1 && index < current) {
@@ -401,7 +414,7 @@ function driverCard(booking) {
             booking.selected_vehicle ? ` — ${esc(booking.selected_vehicle)}` : ''
           } for ${esc(booking.vehicle_category)} on ${esc(booking.date)} at ${esc(
             booking.time
-          )}. This booking is assigned to you.</div></div>`
+          )}. ${booking.status === 'selected' ? 'Tap Confirm Booking to accept this ride.' : 'This booking is assigned to you.'}</div></div>`
         : ''
     }
     <ul class="money-list">
