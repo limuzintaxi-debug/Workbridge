@@ -245,6 +245,9 @@ export function bookingView(booking, viewer) {
     date: booking.date,
     time: booking.time,
     vehicle_category: booking.vehicle_category,
+    // The customer tracking page and the ride panels label this "category";
+    // keep both names pointing at the same value.
+    category: booking.vehicle_category,
     requirements: booking.requirements || '',
     details: booking.details || '',
     currency: booking.currency,
