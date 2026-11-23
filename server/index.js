@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'node:path';
 import { config, supabaseConfigured } from './config.js';
-import { initStore, storeInfo } from './store.js';
+import { initStore } from './store.js';
 import { attachSession } from './middleware.js';
 import api from './routes.js';
 import accountRoutes from './routes-account.js';
@@ -30,21 +30,9 @@ app.use('/api', notifyRoutes);
 app.use('/api', featureRoutes);
 app.use('/api', api);
 
-app.get('/api/health', (req, res) => {
-  const persistence = storeInfo();
-  const degraded = Boolean(persistence.degraded);
-  // Always HTTP 200: the container is up and serving, and a non-200 here would
-  // fail the hosting health check. `ok: false` reports that Supabase is not
-  // storing every collection, so a JSON-cache fallback is visible to monitoring
-  // instead of looking like a healthy app.
-  res.json({
-    ok: !degraded,
-    status: degraded ? 'degraded' : 'ok',
-    service: 'workbridge',
-    persistence,
-    time: new Date().toISOString()
-  });
-});
+// /api/health is served by server/routes.js (mounted above), which owns the
+// endpoint contract. A second handler here was shadowed by that router, so the
+// two shapes drifted apart and the served response lost `status`.
 
 const publicDir = path.join(config.root, 'public');
 

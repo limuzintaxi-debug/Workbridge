@@ -148,17 +148,32 @@ function invoiceView(invoice) {
 
 router.get('/health', (req, res) => {
   const info = storeInfo();
+  const missingTables = info.sync.missing_tables || [];
+  // Single source of truth for /api/health. `driver` is the intended backend and
+  // `sync.last_error` is what the database actually answered on the last write,
+  // so `degraded` is false only while writes really are reaching storage.
+  const persistence = {
+    driver: info.driver,
+    auth_driver: info.auth_driver,
+    degraded: info.degraded,
+    degraded_reason: info.degraded_reason,
+    missing_tables: missingTables
+  };
+  // Always HTTP 200: the container is up and serving, and a non-200 here would
+  // fail the hosting health check. `status: 'degraded'` plus `ok: false` report
+  // that Supabase is not storing every collection, so a JSON-cache fallback
+  // stays visible to monitoring instead of looking like a healthy app.
   res.json({
-    ok: true,
+    ok: !info.degraded,
+    status: info.degraded ? 'degraded' : 'ok',
     service: 'workbridge',
     time: nowIso(),
-    // `driver` is the intended backend; `sync.last_error` is what the database
-    // actually answered on the last write, so this never implies a healthy
-    // connection when writes are being rejected.
-    persistence: persistenceDriver(),
+    persistence,
     supabase_configured: supabaseConfigured(),
     storage: {
       driver: info.driver,
+      degraded: info.degraded,
+      missing_tables: missingTables,
       last_synced_at: info.sync.last_synced_at,
       last_error: info.sync.last_error,
       fallback_file: info.file
