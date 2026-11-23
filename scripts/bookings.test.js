@@ -344,6 +344,68 @@ try {
     assert.equal(wrongOk.status, 200, wrongOk.text);
   });
 
+  await step('driver availability and admin categories survive a reload', async () => {
+    // BUG 1: the driver's own switch must still read back after saving.
+    const on = await drivers[0].patch('/api/auth/profile', { available: true });
+    assert.equal(on.status, 200, on.text);
+    assert.equal((await drivers[0].get('/api/auth/me')).json.user.profile.available, true);
+
+    const off = await drivers[0].patch('/api/auth/profile', { available: false });
+    assert.equal(off.status, 200, off.text);
+    assert.equal(
+      (await drivers[0].get('/api/auth/me')).json.user.profile.available,
+      false,
+      'turning Enable for Work off must persist'
+    );
+
+    // BUG 2: the admin category checkboxes must be stored and read back.
+    const saved = await globalAdmin.patch(`/api/admin/drivers/${driverIds[0]}/booking`, {
+      booking_approved: true,
+      available: true,
+      vehicle_categories: ['VIP', 'Go']
+    });
+    assert.equal(saved.status, 200, saved.text);
+    assert.deepEqual(saved.json.driver.vehicle_categories, ['VIP', 'Go']);
+
+    const rows = await globalAdmin.get('/api/admin/drivers');
+    const row = rows.json.drivers.find((d) => d.id === driverIds[0]);
+    assert.deepEqual(row.vehicle_categories, ['VIP', 'Go'], 'admin categories must survive a reload');
+    assert.equal(row.available, true);
+    assert.equal(row.booking_approved, true);
+
+    // The driver sees the same admin-assigned categories in their own profile.
+    const mine = await drivers[0].get('/api/auth/me');
+    assert.deepEqual(mine.json.user.profile.vehicle_categories, ['VIP', 'Go']);
+
+    // Restore VIP-only so the distribution assertions below stay exact.
+    await globalAdmin.patch(`/api/admin/drivers/${driverIds[0]}/booking`, { vehicle_categories: ['VIP'] });
+  });
+
+  await step('a driver who switched off Enable for Work stops receiving bookings', async () => {
+    await drivers[1].patch('/api/auth/profile', { available: false });
+    const res = await business.post('/api/bookings', {
+      pickup: 'Riyadh Airport',
+      destination: 'Kingdom Centre',
+      date: '2026-12-02',
+      time: '11:00',
+      vehicle_category: 'VIP',
+      requirements: 'One passenger',
+      details: 'Availability gate check'
+    });
+    assert.equal(res.status, 201, res.text);
+    const unseen = await drivers[1].get('/api/bookings/available');
+    assert.ok(
+      !unseen.json.bookings.some((b) => b.id === res.json.booking.id),
+      'an unavailable driver must not receive the booking'
+    );
+    const seen = await drivers[2].get('/api/bookings/available');
+    assert.ok(
+      seen.json.bookings.some((b) => b.id === res.json.booking.id),
+      'an available approved driver must still receive it'
+    );
+    await drivers[1].patch('/api/auth/profile', { available: true });
+  });
+
   await step('a business booking is distributed to eligible drivers only', async () => {
     const res = await business.post('/api/bookings', {
       pickup: 'Riyadh Airport',
