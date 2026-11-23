@@ -420,12 +420,16 @@ try {
       offer_id: selectedOffer.id
     });
     assert.equal(select.status, 200, select.text);
-    // Selecting a driver confirms the booking immediately — no separate accept step.
-    assert.equal(select.json.booking.status, 'confirmed');
+    // Selection assigns the booking to that driver and asks them to confirm it.
+    assert.equal(select.json.booking.status, 'selected');
+    assert.equal(select.json.booking.selected_driver_name, 'Driver 2');
+    assert.equal(select.json.booking.selected_vehicle, 'Vehicle 2');
+    assert.equal(select.json.booking.selected_price, 400);
 
     const asDriver = await drivers[selectedDriverIndex].get(`/api/bookings/${bookingId}`);
     assert.equal(asDriver.status, 200, asDriver.text);
-    assert.equal(asDriver.json.booking.status, 'confirmed');
+    assert.equal(asDriver.json.booking.status, 'selected');
+    assert.equal(asDriver.json.booking.can.accept, true, 'the selected driver gets the Confirm Booking action');
     const businessContact = asDriver.json.booking.business;
     assert.ok(
       businessContact && businessContact.phone,
@@ -466,14 +470,15 @@ try {
     assert.equal(skipDropoff.status, 409, 'drop-off cannot precede pickup');
   });
 
-  await step('selection already confirmed the booking and unlocked both contacts', async () => {
-    // Acceptance stays idempotent for any client that still sends it.
+  await step('the selected driver confirms the booking and both contacts unlock', async () => {
     const accept = await drivers[selectedDriverIndex].post(`/api/bookings/${bookingId}/accept`, {});
     assert.equal(accept.status, 200, accept.text);
-    assert.ok(
-      ['confirmed', 'pickup'].includes(accept.json.booking.status),
-      'acceptance is idempotent once the booking is confirmed'
-    );
+    assert.equal(accept.json.booking.status, 'confirmed', 'Confirm Booking moves the ride to confirmed');
+
+    // Confirming twice is harmless for a client that retries.
+    const again = await drivers[selectedDriverIndex].post(`/api/bookings/${bookingId}/accept`, {});
+    assert.equal(again.status, 200, again.text);
+    assert.equal(again.json.booking.status, 'confirmed');
 
     const driverView = await drivers[selectedDriverIndex].get(`/api/bookings/${bookingId}`);
     assert.ok(driverView.json.booking.business?.phone, 'the driver sees the business phone');
@@ -519,7 +524,11 @@ try {
     assert.equal(pay.json.booking.status, 'paid');
     assert.equal(pay.json.booking.payment.commission_rate, 2);
     assert.equal(pay.json.booking.payment.commission_amount, 8);
-    assert.equal(pay.json.booking.payment.payable_amount, 392);
+    assert.equal(
+      pay.json.booking.payment.payable_amount,
+      400,
+      'the driver receives the full fare; commission is recorded separately and never deducted'
+    );
 
     const otherPay = await otherBusiness.post(`/api/bookings/${bookingId}/payment`, {
       amount: 400,
@@ -730,14 +739,18 @@ try {
 
     const select = await business.post(`/api/bookings/${secondId}/select`, { offer_id: myOffer.id });
     assert.equal(select.status, 200, select.text);
-    assert.equal(select.json.booking.status, 'confirmed', 'selection confirms the booking');
+    assert.equal(select.json.booking.status, 'selected', 'selection asks the chosen driver to confirm');
 
-    // The chosen driver is notified at once — no acceptance step remains.
+    const confirm = await drivers[selectedDriverIndex].post(`/api/bookings/${secondId}/accept`, {});
+    assert.equal(confirm.status, 200, confirm.text);
+    assert.equal(confirm.json.booking.status, 'confirmed', 'the driver confirms with Confirm Booking');
+
+    // The chosen driver is notified at once and asked to confirm.
     const notified = await drivers[selectedDriverIndex].get('/api/notifications');
     assert.equal(notified.status, 200, notified.text);
     assert.ok(
-      notified.text.includes('Your Booking Is Confirmed!'),
-      'the selected driver receives the booking confirmation notification'
+      notified.text.includes('Confirm this booking'),
+      'the selected driver is asked to confirm the booking'
     );
 
     // "Pick Up Customer" → "Drop-off Customer" → "Order Completed"
@@ -761,6 +774,7 @@ try {
     assert.equal(pay.json.booking.status, 'paid');
     assert.equal(pay.json.booking.payment.commission_rate, 2);
     assert.equal(pay.json.booking.payment.commission_amount, 5.5);
+    assert.equal(pay.json.booking.payment.payable_amount, 275, 'the driver keeps the full 275 fare');
 
     const doublePay = await drivers[selectedDriverIndex].post(`/api/bookings/${secondId}/payment`, {
       amount: 275,
@@ -810,6 +824,7 @@ try {
     const driverCard = src.slice(src.indexOf('const DRIVER_ACTIONS'), src.indexOf('function offerForm'));
     assert.ok(driverCard.includes('driverStageActions(booking)'), 'the driver card renders the actions');
     for (const label of [
+      'Confirm Booking',
       'Pick Up Customer',
       'Drop-off Customer',
       'Order Completed',
