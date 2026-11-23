@@ -522,9 +522,21 @@ export async function driverBookingsView(ctx) {
         .join('')
     : '<div class="empty">No open bookings for your approved categories right now.</div>';
 
-  const mineHtml = mine.bookings.length
-    ? mine.bookings.map((booking) => driverCard(booking)).join('')
-    : '<div class="empty">You have no bookings yet.</div>';
+  // Finished rides move behind the Booking History button, the same way the
+  // business dashboard keeps its past bookings out of the live list. The list
+  // itself comes from /bookings/driver/mine, which the server scopes to the
+  // signed-in driver, so a driver only ever sees their own rides.
+  const CLOSED = ['completed', 'cancelled'];
+  const currentBookings = mine.bookings.filter((booking) => !CLOSED.includes(booking.status));
+  const pastBookings = mine.bookings.filter((booking) => CLOSED.includes(booking.status));
+
+  const currentHtml = currentBookings.length
+    ? currentBookings.map((booking) => driverCard(booking)).join('')
+    : '<div class="empty">You have no active bookings.</div>';
+
+  const historyHtml = pastBookings.length
+    ? pastBookings.map((booking) => driverCard(booking)).join('')
+    : '<div class="empty">No previous bookings.</div>';
 
   return {
     title: 'Bookings',
@@ -534,9 +546,33 @@ export async function driverBookingsView(ctx) {
       tabs,
       path: '/worker/bookings',
       body: `<h2>Open booking requests</h2>${availableHtml}
-        <h2 style="margin-top:24px">My bookings</h2>${mineHtml}`
+        <div class="btn-row" id="driver-booking-switch" style="margin:16px 0">
+          <button class="btn btn-navy" type="button" data-pane="current">My Bookings</button>
+          <button class="btn btn-ghost" type="button" data-pane="history">Booking History</button>
+        </div>
+        <div data-pane-body="current">
+          <h2>My bookings</h2>${currentHtml}
+        </div>
+        <div data-pane-body="history" hidden>
+          <h2>Booking History</h2>${historyHtml}
+        </div>`
     }),
     mount: () => {
+      // Past rides stay closed until Booking History is pressed.
+      for (const button of document.querySelectorAll('#driver-booking-switch [data-pane]')) {
+        button.addEventListener('click', () => {
+          const target = button.dataset.pane;
+          for (const pane of document.querySelectorAll('[data-pane-body]')) {
+            pane.hidden = pane.dataset.paneBody !== target;
+          }
+          for (const other of document.querySelectorAll('#driver-booking-switch [data-pane]')) {
+            const on = other === button;
+            other.classList.toggle('btn-navy', on);
+            other.classList.toggle('btn-ghost', !on);
+          }
+        });
+      }
+
       for (const offerFormEl of document.querySelectorAll('[data-offer-form]')) {
         offerFormEl.addEventListener('submit', async (event) => {
           event.preventDefault();
