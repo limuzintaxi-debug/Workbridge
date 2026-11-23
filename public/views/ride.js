@@ -197,17 +197,19 @@ export function trackBookingView(ctx, token) {
                   ${
                     booking.selected_price
                       ? `<p class="muted" style="margin:4px 0 0">Agreed price: ${esc(
-                          String(booking.selected_price)
+                          String(
+                            typeof booking.selected_price === 'object'
+                              ? booking.selected_price.price ?? booking.selected_price.amount ?? 0
+                              : booking.selected_price
+                          )
                         )} ${esc(booking.currency || '')}</p>`
                       : ''
                   }
-                  <p class="muted" style="margin:4px 0 0">${
+                  ${
                     booking.selected_driver.phone
-                      ? `Phone: ${esc(booking.selected_driver.phone)}`
-                      : booking.contact_hidden
-                        ? "The driver's phone number was removed because this booking is completed. Your booking record, dates and price are kept."
-                        : "The driver's phone number appears here as soon as they accept."
-                  }</p>
+                      ? `<p class="muted" style="margin:4px 0 0">Phone: ${esc(booking.selected_driver.phone)}</p>`
+                      : ''
+                  }
                 </div>`
               : ''
           }
