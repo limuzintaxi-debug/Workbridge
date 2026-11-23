@@ -1,5 +1,9 @@
 import { api } from './api.js?v=23';
 import { esc, setDefaultCurrency } from './ui.js?v=23';
+// app.js calls t() and initLang() while building the shell and booting, so these
+// must be imported here; without them boot threw ReferenceError and the page
+// rendered nothing but the skip link.
+import { initLang, t } from './i18n.js?v=26';
 import { bellHtml, initNotifications } from './notify.js?v=26';
 import * as pub from './views/public.js?v=23';
 import * as worker from './views/worker.js?v=23';
