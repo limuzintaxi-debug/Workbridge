@@ -488,6 +488,81 @@ try {
     assert.ok(booking.driver?.phone, 'the business sees the selected driver phone');
   });
 
+  await step('booking chat opens only for the business and the selected driver', async () => {
+    const businessChat = await business.get(`/api/bookings/${bookingId}/chat`);
+    assert.equal(businessChat.status, 200, businessChat.text);
+    assert.equal(businessChat.json.chat_open, true, 'chat is available once the booking is confirmed');
+    assert.equal(businessChat.json.messages.length, 0);
+
+    const driverChat = await drivers[selectedDriverIndex].get(`/api/bookings/${bookingId}/chat`);
+    assert.equal(driverChat.status, 200, driverChat.text);
+
+    // An unselected driver who did offer on the ride still has no conversation.
+    const outsiderIndex = (selectedDriverIndex + 1) % drivers.length;
+    const outsiderRead = await drivers[outsiderIndex].get(`/api/bookings/${bookingId}/chat`);
+    assert.equal(outsiderRead.status, 403, 'an unselected driver cannot open the conversation');
+    const outsiderWrite = await drivers[outsiderIndex].post(`/api/bookings/${bookingId}/chat/messages`, {
+      text: 'let me in'
+    });
+    assert.equal(outsiderWrite.status, 403, 'an unselected driver cannot post to the conversation');
+  });
+
+  await step('business and driver exchange messages with unread counts', async () => {
+    const sent = await business.post(`/api/bookings/${bookingId}/chat/messages`, {
+      text: 'Pickup at gate 4 please.'
+    });
+    assert.equal(sent.status, 201, sent.text);
+    const own = sent.json.messages.find((m) => m.text === 'Pickup at gate 4 please.');
+    assert.ok(own, 'the sender sees the stored message');
+    assert.equal(own.mine, true);
+
+    const driverChat = await drivers[selectedDriverIndex].get(`/api/bookings/${bookingId}/chat`);
+    const received = driverChat.json.messages.find((m) => m.text === 'Pickup at gate 4 please.');
+    assert.ok(received, 'the selected driver receives the message');
+    assert.equal(received.mine, false);
+    assert.equal(driverChat.json.unread, 1, 'the message is unread for the driver');
+
+    const reply = await drivers[selectedDriverIndex].post(`/api/bookings/${bookingId}/chat/messages`, {
+      text: 'On my way.'
+    });
+    assert.equal(reply.status, 201, reply.text);
+
+    const read = await drivers[selectedDriverIndex].post(`/api/bookings/${bookingId}/chat/read`, {});
+    assert.equal(read.status, 200, read.text);
+    const after = await drivers[selectedDriverIndex].get(`/api/bookings/${bookingId}/chat`);
+    assert.equal(after.json.unread, 0, 'opening the conversation clears the driver badge');
+  });
+
+  await step('the notification bell reports events, unread counts and the sound setting', async () => {
+    const bell = await business.get('/api/notifications');
+    assert.equal(bell.status, 200, bell.text);
+    assert.ok(bell.json.notifications.length >= 1, 'booking events reach the business bell');
+    assert.equal(bell.json.sound, true, 'sound defaults to on');
+    assert.ok(bell.json.unread >= 1, 'the business has unread notifications');
+
+    const driverBell = await drivers[selectedDriverIndex].get('/api/notifications');
+    assert.ok(driverBell.json.notifications.length >= 1, 'the selected driver is notified too');
+
+    const off = await business.patch('/api/notifications/prefs', { sound: false });
+    assert.equal(off.status, 200, off.text);
+    assert.equal(off.json.sound, false, 'the sound preference is stored');
+    const reloaded = await business.get('/api/notifications');
+    assert.equal(reloaded.json.sound, false, 'the preference survives a page reload');
+
+    const readAll = await business.post('/api/notifications/read-all', {});
+    assert.equal(readAll.status, 200, readAll.text);
+    const cleared = await business.get('/api/notifications');
+    assert.equal(cleared.json.unread, 0, 'mark all read clears the badge');
+  });
+
+  await step('the bell needs a session and the push key is public', async () => {
+    const anonymous = await anon.get('/api/notifications');
+    assert.equal(anonymous.status, 401, 'the bell requires a signed-in user');
+    const key = await anon.get('/api/push/public-key');
+    assert.equal(key.status, 200, key.text);
+    assert.ok(typeof key.json.key === 'string' && key.json.key.length > 40, 'a VAPID public key is served');
+  });
+
   await step('pickup, drop-off and completion are separate recorded steps', async () => {
     const pickup = await drivers[selectedDriverIndex].post(`/api/bookings/${bookingId}/pickup`, {});
     assert.equal(pickup.status, 200, pickup.text);
