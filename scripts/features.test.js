@@ -329,7 +329,9 @@ try {
     const list = await worker.get('/api/ride-bookings');
     const found = list.json.bookings.find((b) => b.id === bookingId);
     assert.ok(found, 'the enabled worker must receive the booking');
-    assert.equal(found.category, 'VIP');
+    // The driver list returns the stored ride record, whose field is
+    // vehicle_category (the customer view renames it to category).
+    assert.equal(found.vehicle_category, 'VIP');
 
     // The driver answers with the two things the offer form asks for.
     const offer = await worker.post(`/api/bookings/${bookingId}/offers`, {
