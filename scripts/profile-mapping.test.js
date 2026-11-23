@@ -22,9 +22,12 @@ process.env.DATA_DIR = dataDir;
 process.env.NODE_ENV = 'test';
 process.env.SESSION_SECRET = 'profile-mapping-test-session-secret';
 
-const { data } = await import('../server/store.js');
+const { data, initStore } = await import('../server/store.js');
 const { driverProfile, ensureWorkerProfile, eligibleDriver } = await import('../server/bookings.js');
 const { profileFor } = await import('../server/middleware.js');
+
+// data() throws until the store is loaded; NODE_ENV=test keeps this local-only.
+await initStore();
 
 let passed = 0;
 function ok(name) {
