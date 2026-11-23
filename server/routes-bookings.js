@@ -419,6 +419,13 @@ for (const [path, rule] of Object.entries(STAGE_ACTION)) {
       return fail(res, 409, 'wrong_stage', rule.error);
     }
     pushEvent(booking, rule.to, req.user);
+    notify(
+      booking.business_id,
+      `Booking update — ${STATUS_LABELS[rule.to] || rule.to}`,
+      `${booking.ref} · ${booking.pickup} → ${booking.destination}`,
+      '#/business/bookings',
+      { kind: 'status', booking_id: booking.id }
+    );
     if (rule.to === 'complete_order') {
       notify(
         booking.business_id,
