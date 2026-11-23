@@ -260,8 +260,8 @@ await step('the customer selects a driver (deliberately not the cheapest)', asyn
 
   const res = await anon.post(`/api/ride-bookings/track/${token}/select`, { offer_id: target.id });
   assert.equal(res.status, 200, res.text);
-  // Selection confirms the booking immediately; the driver acts from pickup on.
-  assert.equal(res.json.booking.status, 'confirmed');
+  // Selection assigns the booking to that one driver and asks them to confirm.
+  assert.equal(res.json.booking.status, 'selected');
   assert.equal(
     res.json.booking.selected_driver_id,
     driverIds[1],
@@ -287,7 +287,7 @@ await step('non-selected drivers cannot act and never receive contact details', 
   // number must never reach a driver who was not chosen.
   const view = await drivers[0].get(`/api/bookings/${bookingId}`);
   assert.equal(view.status, 200, view.text);
-  assert.equal(view.json.booking.status, 'confirmed');
+  assert.equal(view.json.booking.status, 'selected');
   assert.ok(
     !view.text.includes(CUSTOMER.phone),
     'a non-selected driver must not receive the customer phone number'
@@ -301,10 +301,14 @@ await step('non-selected drivers cannot act and never receive contact details', 
   );
 });
 
-await step('the selected driver already holds a confirmed booking', async () => {
+await step('the selected driver confirms the booking and both sides see it', async () => {
   const accept = await drivers[1].post(`/api/bookings/${bookingId}/accept`, {});
-  assert.equal(accept.status, 200, 'acceptance stays idempotent');
-  assert.equal(accept.json.booking.status, 'confirmed');
+  assert.equal(accept.status, 200, accept.text);
+  assert.equal(accept.json.booking.status, 'confirmed', 'Confirm Booking confirms the ride');
+
+  const twice = await drivers[1].post(`/api/bookings/${bookingId}/accept`, {});
+  assert.equal(twice.status, 200, 'confirmation stays idempotent');
+  assert.equal(twice.json.booking.status, 'confirmed');
 
   const mine = await drivers[1].get('/api/bookings/driver/mine');
   assert.equal(mine.status, 200, mine.text);
