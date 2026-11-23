@@ -162,6 +162,30 @@ export function persist() {
   }
 }
 
+/**
+ * Persist and await the Supabase write so a route can report the real outcome.
+ * `persist()` is deliberately fire-and-forget, which meant a rejected write
+ * still answered "saved" and the value vanished on the next restart.
+ */
+export async function flushNow(timeoutMs = 8000) {
+  if (!state) return { ok: true, driver: persistenceDriver(), error: null };
+  writeLocal();
+  if (persistenceDriver() !== 'supabase') return { ok: true, driver: 'local-json', error: null };
+  const deadline = Date.now() + timeoutMs;
+  // An earlier write may already be flushing; wait for it so the caller reports
+  // the outcome of the value it just changed rather than a stale status.
+  const settle = async () => {
+    while (syncing && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+  };
+  await settle();
+  await flushToSupabase();
+  await settle();
+  const error = syncStatus.last_error;
+  return { ok: !error, driver: 'supabase', error };
+}
+
 export function nextCounter(name) {
   const counters = data().meta.counters;
   counters[name] = (counters[name] || 1000) + 1;

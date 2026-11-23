@@ -89,6 +89,10 @@ export function eligibleDriver(user, booking) {
   if (user.ride_booking_enabled !== true) return false;
   const profile = driverProfile(user.id) || {};
   if (profile.booking_approved !== true) return false;
+  // The driver's own "Enable for Work" switch must be on as well. Profiles are
+  // created available, so only an explicit "off" excludes a driver — which is
+  // what stops requests reaching someone who marked themselves unavailable.
+  if (profile.available === false) return false;
   const categories = Array.isArray(profile.vehicle_categories) ? profile.vehicle_categories : [];
   if (!categories.includes(booking.vehicle_category)) return false;
   const bookCountry = String(booking.country || '').trim().toLowerCase();
