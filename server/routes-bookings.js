@@ -197,12 +197,12 @@ router.post('/bookings/:id/select', bookingBusiness, (req, res) => {
     );
   }
 
-  // Selecting a driver confirms the booking immediately: the chosen driver is
-  // assigned and notified right away, with no separate acceptance step.
-  pushEvent(booking, 'confirmed', req.user);
+  // Selection asks that one driver to confirm. The ride does not start until
+  // the selected driver accepts, and no other driver can act on this booking.
+  pushEvent(booking, 'selected', req.user);
   notify(
     offer.driver_id,
-    'Your Booking Is Confirmed!',
+    'Confirm this booking',
     `${booking.ref}: ${booking.pickup} → ${booking.destination} on ${booking.date} at ${booking.time}` +
       ` · ${booking.selected_price} ${booking.currency}${booking.selected_vehicle ? ` · ${booking.selected_vehicle}` : ''}`,
     '#/worker/bookings'
@@ -430,7 +430,10 @@ router.post('/bookings/:id/payment', bookingPayer, (req, res) => {
   const commission = currentCommission();
   const rate = Number(commission.rate) || 0;
   const commissionAmount = round2((amount * rate) / 100);
-  const payable = round2(amount - commissionAmount);
+  // The driver always receives the full fare the customer paid. The platform
+  // commission is a separate accounting record and is never subtracted from
+  // the driver's amount, so payable equals the amount received.
+  const payable = round2(amount);
 
   booking.payment = {
     amount,
@@ -447,6 +450,7 @@ router.post('/bookings/:id/payment', bookingPayer, (req, res) => {
   };
   pushEvent(booking, 'paid', req.user);
 
+  const driverUser = data().users.find((u) => u.id === booking.selected_driver_id) || null;
   // Compact commission record — kept even at 0% for a complete audit trail.
   if (!Array.isArray(data().commissions)) data().commissions = [];
   data().commissions.unshift({
@@ -460,7 +464,8 @@ router.post('/bookings/:id/payment', bookingPayer, (req, res) => {
     commission_amount: commissionAmount,
     payer: commission.payer || 'business',
     worker_id: booking.selected_driver_id,
-    worker_name: booking.selected_vehicle || '',
+    worker_name: driverUser ? driverUser.full_name || '' : '',
+    vehicle_name: booking.selected_vehicle || '',
     business_id: booking.business_id,
     business_name: booking.business_name || '',
     country: booking.country || '',

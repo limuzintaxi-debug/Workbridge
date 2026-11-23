@@ -15,6 +15,18 @@ import { data } from './store.js';
 import { nowIso, round2 } from './util.js';
 import { inScope } from './scope.js';
 
+/**
+ * A price is normally a plain number, but older records stored the whole offer
+ * or an { amount } object in the price field. Every price leaving the server is
+ * normalised here so a dashboard can never render "[object Object] 250.00".
+ */
+const money = (value) => {
+  if (value && typeof value === 'object') {
+    return Number(value.price ?? value.amount ?? value.value ?? 0) || 0;
+  }
+  return Number(value) || 0;
+};
+
 export const VEHICLE_CATEGORIES = ['Small Car', 'Go', 'Business', 'VIP'];
 
 export const STAGE_FLOW = [
@@ -178,7 +190,7 @@ function offerView(offer) {
     driver_name: offer.driver_name,
     vehicle_name: offer.vehicle_name,
     vehicle_category: offer.vehicle_category,
-    price: offer.price,
+    price: money(offer.price),
     created_at: offer.created_at
   };
 }
@@ -198,6 +210,17 @@ export function bookingView(booking, viewer) {
   const myOffer = viewer
     ? (booking.offers || []).find((offer) => offer.driver_id === viewer.id) || null
     : null;
+
+  const selectedDriverUser = booking.selected_driver_id
+    ? data().users.find((user) => user.id === booking.selected_driver_id) || null
+    : null;
+  const selectedOffer = validOffers(booking).find(
+    (offer) => offer.id === booking.selected_offer_id
+  );
+  const selectedVehicle =
+    (typeof booking.selected_vehicle === 'string' && booking.selected_vehicle) ||
+    (selectedOffer && typeof selectedOffer.vehicle_name === 'string' && selectedOffer.vehicle_name) ||
+    '';
 
   let offers = [];
   let eligibleCount = 0;
@@ -235,7 +258,12 @@ export function bookingView(booking, viewer) {
     my_offer: myOffer ? offerView(myOffer) : null,
     selected_offer_id: booking.selected_offer_id || null,
     selected_driver_id: booking.selected_driver_id || null,
-    selected_price: booking.selected_price || null,
+    selected_driver_name: selectedDriverUser ? selectedDriverUser.full_name || '' : '',
+    selected_vehicle: selectedVehicle,
+    selected_price:
+      booking.selected_price === null || booking.selected_price === undefined
+        ? null
+        : money(booking.selected_price),
     events: (booking.events || []).map((event) => ({
       status: event.status,
       label: STATUS_LABELS[event.status] || event.status,
@@ -289,11 +317,15 @@ export function bookingView(booking, viewer) {
 
   if (booking.payment) {
     view.payment = {
-      amount: booking.payment.amount,
+      amount: money(booking.payment.amount),
       currency: booking.payment.currency,
-      commission_rate: booking.payment.commission_rate,
-      commission_amount: booking.payment.commission_amount,
-      payable_amount: booking.payment.payable_amount,
+      commission_rate: Number(booking.payment.commission_rate) || 0,
+      commission_amount: money(booking.payment.commission_amount),
+      // Full fare to the driver; commission is recorded separately.
+      payable_amount:
+        booking.payment.payable_amount === undefined || booking.payment.payable_amount === null
+          ? money(booking.payment.amount)
+          : money(booking.payment.payable_amount),
       payer: booking.payment.payer,
       status: booking.payment.status,
       reference: booking.payment.reference,
@@ -322,8 +354,8 @@ export function customerBookingView(booking) {
     selectedDriver = {
       name: driverUser?.full_name || driverUser?.name || 'Selected driver',
       phone: unlocked && !finished ? driverUser?.phone || '' : '',
-      vehicle_name: booking.selected_vehicle || '',
-      price: booking.selected_price || 0
+      vehicle_name: selectedVehicle,
+      price: money(booking.selected_price)
     };
   }
   const all = validOffers(booking);
