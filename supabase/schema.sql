@@ -629,3 +629,79 @@ grant all privileges on all sequences in schema public to service_role;
 -- Keep future tables created in this schema usable without re-running the file.
 alter default privileges in schema public grant all on tables to service_role;
 alter default privileges in schema public grant all on sequences to service_role;
+
+-- ------------------------------------------------- ride booking and mall tables --
+-- Ride Booking and WORKBRIDGE MALL are stored as collections the server reads
+-- and filters in memory, so they use the same {id, doc, created_at} shape as the
+-- rest of the schema: loadState() reads `select id,doc order by created_at`,
+-- upsertRows() writes `{id, doc}` and deleteRows() removes by id. Keeping the
+-- document in one jsonb column avoids duplicating fields and keeps storage small.
+-- These four were missing from earlier installs, which is why their records were
+-- only ever kept in the JSON fallback file; migration 003 adds them to a live
+-- database.
+
+create table if not exists public.ride_bookings (
+  id text primary key,
+  doc jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists ride_bookings_created_idx on public.ride_bookings (created_at);
+
+create table if not exists public.mall_vehicles (
+  id text primary key,
+  doc jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists mall_vehicles_created_idx on public.mall_vehicles (created_at);
+
+create table if not exists public.mall_shops (
+  id text primary key,
+  doc jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists mall_shops_created_idx on public.mall_shops (created_at);
+
+create table if not exists public.mall_products (
+  id text primary key,
+  doc jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists mall_products_created_idx on public.mall_products (created_at);
+
+-- These endpoints are only reached through the WORKBRIDGE server, which decides
+-- who may read or write a booking or a listing. A browser token is therefore
+-- denied outright, and service_role (the server key) bypasses RLS and works.
+alter table public.ride_bookings enable row level security;
+alter table public.mall_vehicles enable row level security;
+alter table public.mall_shops    enable row level security;
+alter table public.mall_products enable row level security;
+
+drop policy if exists ride_bookings_no_client_access on public.ride_bookings;
+create policy ride_bookings_no_client_access on public.ride_bookings
+  for all to anon, authenticated
+  using (false) with check (false);
+
+drop policy if exists mall_vehicles_no_client_access on public.mall_vehicles;
+create policy mall_vehicles_no_client_access on public.mall_vehicles
+  for all to anon, authenticated
+  using (false) with check (false);
+
+drop policy if exists mall_shops_no_client_access on public.mall_shops;
+create policy mall_shops_no_client_access on public.mall_shops
+  for all to anon, authenticated
+  using (false) with check (false);
+
+drop policy if exists mall_products_no_client_access on public.mall_products;
+create policy mall_products_no_client_access on public.mall_products
+  for all to anon, authenticated
+  using (false) with check (false);
+
+-- Tables created after the blanket grant above need their own privileges.
+grant all on public.ride_bookings to service_role;
+grant all on public.mall_vehicles to service_role;
+grant all on public.mall_shops to service_role;
+grant all on public.mall_products to service_role;
