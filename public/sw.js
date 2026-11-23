@@ -9,7 +9,7 @@
  * fallback only, so each new deployment reaches an existing visitor on their
  * next load. /api/ is never intercepted.
  */
-const CACHE = 'workbridge-v9';
+const CACHE = 'workbridge-v10';
 
 const SHELL = [
   '/',
@@ -29,6 +29,8 @@ const SHELL = [
   '/views/ride.js',
   '/views/bookings.js',
   '/views/mall.js',
+  '/views/chat.js',
+  '/notify.js',
   '/views/docs.js',
   '/views/agreement-open.js',
   '/assets/logo.png?v=2',
@@ -95,5 +97,45 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith(
     fromNetwork(request).catch(() => caches.match(request).then((cached) => cached || Response.error()))
+  );
+});
+
+
+/* Web Push: the server sends an empty tickle, so the worker builds the text
+ * itself and only ever reveals what the payload contains. */
+self.addEventListener('push', (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    payload = {};
+  }
+  const title = payload.title || 'WORKBRIDGE';
+  const body = payload.body || 'You have a new notification.';
+  const link = payload.link || '#/';
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: '/assets/icon-192.png?v=2',
+      badge: '/assets/favicon-32.png?v=2',
+      tag: payload.tag || 'workbridge',
+      data: { link }
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const link = (event.notification.data && event.notification.data.link) || '#/';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const client of list) {
+        if ('focus' in client) {
+          client.postMessage({ type: 'notify-link', link });
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(`/${link}`);
+    })
   );
 });

@@ -1,6 +1,6 @@
 import { api } from './api.js?v=23';
 import { esc, setDefaultCurrency } from './ui.js?v=23';
-import { t, initLang, langSwitcher, bindLangSwitcher } from './i18n.js?v=23';
+import { bellHtml, initNotifications } from './notify.js?v=26';
 import * as pub from './views/public.js?v=23';
 import * as worker from './views/worker.js?v=23';
 import * as business from './views/business.js?v=23';
@@ -10,7 +10,8 @@ import * as account from './views/account.js?v=23';
 import * as ride from './views/ride.js?v=23';
 import * as mall from './views/mall.js?v=23';
 import * as owner from './views/owner.js?v=23';
-import * as bookings from './views/bookings.js?v=25';
+import * as bookings from './views/bookings.js?v=26';
+import * as chat from './views/chat.js?v=26';
 import { openAgreementView } from './views/agreement-open.js?v=23';
 
 const state = { user: null, meta: null };
@@ -83,6 +84,7 @@ function topbarHtml(path) {
       ${links
         .map(([href, key]) => `<a href="${href}" class="${active(href)}">${esc(t(key))}</a>`)
         .join('')}
+      ${role ? bellHtml() : ''}
       ${langSwitcher()}
       ${
         role
@@ -183,6 +185,9 @@ async function route(path, parts, query) {
   if (path === '/worker/ride-bookings') return guard('worker', ctx) || ride.workerRideView(ctx);
   // Booking system, one view per panel. Declared before the generic panel
   // matcher so these paths never fall through to the default panel view.
+  if (parts[0] === 'chat' && parts[1]) {
+    return guardAny(['worker', 'business'], ctx) || chat.chatView(ctx, parts[1]);
+  }
   if (path === '/business/bookings') return guard('business', ctx) || bookings.businessBookingsView(ctx);
   if (path === '/worker/bookings') return guard('worker', ctx) || bookings.driverBookingsView(ctx);
   if (path === '/admin/drivers') return guard('admin', ctx) || bookings.adminDriversView(ctx);
@@ -281,6 +286,7 @@ async function render() {
     const container = document.getElementById('view');
     container.innerHTML = `${commissionBanner()}${view.html || ''}`;
     document.getElementById('topbar').innerHTML = topbarHtml(path);
+    initNotifications();
     bindLangSwitcher(document.getElementById('topbar'), () => render());
     document.getElementById('footer').innerHTML = footerHtml();
     document.title = view.title

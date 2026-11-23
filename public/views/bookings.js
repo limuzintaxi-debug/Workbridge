@@ -219,6 +219,11 @@ function businessCard(booking) {
         : ''
     }
     ${contactOf(booking, 'business')}
+    ${
+      booking.can && booking.can.chat
+        ? `<div class="btn-row"><a class="btn btn-navy btn-sm" href="#/chat/${esc(booking.id)}">Chat with driver</a></div>`
+        : ''
+    }
     ${paymentBlock(booking)}
     ${
       ['created', 'offers', 'selected'].includes(booking.status)
@@ -230,6 +235,11 @@ function businessCard(booking) {
 
 export async function businessBookingsView(ctx) {
   const { bookings } = await api.get('/bookings/mine');
+  // Completed and cancelled rides live behind the History button; only live
+  // bookings stay on the dashboard.
+  const CLOSED = ['completed', 'cancelled'];
+  const activeBookings = bookings.filter((booking) => !CLOSED.includes(booking.status));
+  const pastBookings = bookings.filter((booking) => CLOSED.includes(booking.status));
   const tabs = [
     ['#/business', 'Dashboard'],
     ['#/business/bookings', 'Book a Car'],
@@ -262,15 +272,38 @@ export async function businessBookingsView(ctx) {
     tabs,
     path: '/business/bookings',
     body: `${stageStrip()}
-      ${form}
-      <h2 style="margin-top:24px">My bookings</h2>
-      ${bookings.length ? bookings.map(businessCard).join('') : '<div class="empty">No bookings yet.</div>'}`
+      <div class="btn-row" id="booking-switch" style="margin:16px 0">
+        <button class="btn btn-navy" type="button" data-pane="create">Create Booking</button>
+        <button class="btn btn-ghost" type="button" data-pane="history">History</button>
+      </div>
+      <div data-pane-body="create" hidden>${form}</div>
+      <div data-pane-body="history">
+        <h2>Active bookings</h2>
+        ${activeBookings.length ? activeBookings.map(businessCard).join('') : '<div class="empty">No active bookings.</div>'}
+        <h2 style="margin-top:24px">History</h2>
+        ${pastBookings.length ? pastBookings.map(businessCard).join('') : '<div class="empty">No previous bookings.</div>'}
+      </div>`
   });
 
   return {
     title: 'Book a Car',
     html,
     mount: () => {
+      // The form stays closed until Create Booking is pressed.
+      for (const button of document.querySelectorAll('#booking-switch [data-pane]')) {
+        button.addEventListener('click', () => {
+          const target = button.dataset.pane;
+          for (const pane of document.querySelectorAll('[data-pane-body]')) {
+            pane.hidden = pane.dataset.paneBody !== target;
+          }
+          for (const other of document.querySelectorAll('#booking-switch [data-pane]')) {
+            const on = other === button;
+            other.classList.toggle('btn-navy', on);
+            other.classList.toggle('btn-ghost', !on);
+          }
+        });
+      }
+
       const formEl = document.getElementById('booking-form');
       formEl?.addEventListener('submit', async (event) => {
         event.preventDefault();
@@ -436,6 +469,11 @@ function driverCard(booking) {
     ${booking.details ? `<p class="muted">${esc(booking.details)}</p>` : ''}
     ${booking.requirements ? `<p class="muted">Requirements: ${esc(booking.requirements)}</p>` : ''}
     ${contactOf(booking, 'driver')}
+    ${
+      booking.can && booking.can.chat
+        ? `<div class="btn-row"><a class="btn btn-navy btn-sm" href="#/chat/${esc(booking.id)}">Chat with business</a></div>`
+        : ''
+    }
     ${driverStageActions(booking)}
     ${paymentBlock(booking, { finalizeButton: false })}
   </article>`;
