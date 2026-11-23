@@ -68,12 +68,15 @@ router.get('/bookings/:id/chat', (req, res) => {
     });
   }
 
+  // Report how many messages were new when the conversation was opened, then
+  // clear them: the badge should show what arrived, not a permanent zero.
+  const unreadBefore = unreadFor(booking.id, viewer.id);
   markRead(booking.id, viewer.id);
   return res.json({
     chat_open: true,
     booking: chatHeader(booking, viewer),
     messages: messagesFor(booking.id).map((row) => messageView(row, viewer.id)),
-    unread: 0
+    unread: unreadBefore
   });
 });
 
