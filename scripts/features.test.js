@@ -281,6 +281,7 @@ try {
   /* ---------------------------------------------------------- ride booking */
 
   let bookingId = null;
+  let trackToken = null;
 
   await step('an ordinary worker never receives ride bookings', async () => {
 
@@ -306,6 +307,14 @@ try {
   });
 
   await step('a customer books a car in one step and the enabled worker sees it', async () => {
+    // A ride is distributed only to drivers approved for its vehicle category,
+    // so the owner approves this driver for VIP first.
+    const approve = await owner.patch(`/api/admin/drivers/${workerId}/booking`, {
+      booking_approved: true,
+      vehicle_categories: ['VIP']
+    });
+    assert.equal(approve.status, 200, approve.text);
+
     const created = await anon.post('/api/ride-bookings', {
       category: 'VIP',
       details: 'Airport pickup at 18:00, two bags, terminal 3.',
@@ -315,15 +324,35 @@ try {
     assert.equal(created.status, 201, created.text);
     assert.match(created.json.booking.ref, /^WB-RIDE-\d+$/);
     bookingId = created.json.booking.id;
+    trackToken = created.json.track_token;
 
     const list = await worker.get('/api/ride-bookings');
     const found = list.json.bookings.find((b) => b.id === bookingId);
     assert.ok(found, 'the enabled worker must receive the booking');
     assert.equal(found.category, 'VIP');
 
-    const claimed = await worker.post(`/api/ride-bookings/${bookingId}/claim`);
-    assert.equal(claimed.status, 200, claimed.text);
-    assert.equal(claimed.json.booking.status, 'claimed');
+    // The driver answers with the two things the offer form asks for.
+    const offer = await worker.post(`/api/bookings/${bookingId}/offers`, {
+      vehicle_name: 'GMC Yukon',
+      price: 250
+    });
+    assert.ok([200, 201].includes(offer.status), offer.text);
+
+    const tracked = await anon.get(`/api/ride-bookings/track/${trackToken}`);
+    assert.equal(tracked.status, 200, tracked.text);
+    const offers = tracked.json.booking.offers || [];
+    const picked = offers.find((o) => o.vehicle_name === 'GMC Yukon');
+    assert.ok(picked, 'the customer sees the driver vehicle and price');
+    assert.equal(Number(picked.price), 250);
+
+    const selected = await anon.post(`/api/ride-bookings/track/${trackToken}/select`, {
+      offer_id: picked.id
+    });
+    assert.equal(selected.status, 200, selected.text);
+
+    const confirmed = await worker.post(`/api/bookings/${bookingId}/accept`);
+    assert.equal(confirmed.status, 200, confirmed.text);
+    assert.equal(confirmed.json.booking.status, 'confirmed');
   });
 
   await step('all four vehicle categories are accepted and unknown ones rejected', async () => {

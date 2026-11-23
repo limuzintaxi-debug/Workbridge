@@ -17,6 +17,7 @@ import { adminScope, inScope, filterByScope, isOwner, normalizeScope } from './s
 import { isValidCurrency } from './currency.js';
 import { PAY_PERIODS, round2, nowIso, isEmail, str, num } from './util.js';
 import {
+  eligibleDriver,
   eligibleDrivers,
   pushEvent,
   customerBookingView,
@@ -432,7 +433,16 @@ router.get('/ride-bookings', requireRole('worker', 'admin'), (req, res) => {
       );
     }
     const list = db.rideBookings
-      .filter((b) => b.status === 'open' || b.assigned_worker_id === req.user.id)
+      .filter((b) => {
+        // A ride the driver is already part of stays visible to it.
+        if (b.assigned_worker_id === req.user.id || b.selected_driver_id === req.user.id) {
+          return true;
+        }
+        // Customer bookings wait at 'created' until offers arrive, so they must
+        // be shown to every driver approved for that category and region.
+        if (!['created', 'offers'].includes(b.status)) return false;
+        return eligibleDriver(req.user, b);
+      })
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     return res.json({ bookings: list, enabled: true });
   }
