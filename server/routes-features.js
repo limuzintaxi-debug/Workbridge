@@ -384,11 +384,9 @@ router.post('/ride-bookings/track/:token/select', (req, res) => {
   booking.selected_vehicle = offer.vehicle_name;
   pushEvent(booking, 'selected', { id: 'customer', role: 'customer' });
 
-  // Selection confirms the booking straight away: the chosen driver starts from
-  // pickup and never has to accept a booking the customer already awarded.
-  booking.status = 'confirmed';
-  booking.confirmed_at = nowIso();
-  pushEvent(booking, 'confirmed', { id: 'customer', role: 'customer' });
+  // The booking waits at 'selected' until that one driver confirms it. The ride
+  // only moves to pickup after the driver accepts.
+  booking.status = 'selected';
 
   // Close every other offer so only the chosen driver can act on the booking.
   // They stay on the record so the history of who offered what is not lost.
@@ -410,8 +408,8 @@ router.post('/ride-bookings/track/:token/select', (req, res) => {
   data().notifications.unshift({
     id: id(),
     user_id: offer.driver_id,
-    title: 'Your Booking Is Confirmed!',
-    body: `${booking.ref}: ${booking.pickup} → ${booking.destination} · ${booking.selected_price} ${booking.currency}${booking.selected_vehicle ? ` · ${booking.selected_vehicle}` : ''}. Tap to start the trip.`,
+    title: 'Confirm this booking',
+    body: `${booking.ref}: ${booking.pickup} → ${booking.destination} · ${booking.selected_price} ${booking.currency}${booking.selected_vehicle ? ` · ${booking.selected_vehicle}` : ''}. Open Bookings and tap Confirm Booking.`,
     link: '#/worker/bookings',
     read_at: null,
     created_at: nowIso()
