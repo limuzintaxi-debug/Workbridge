@@ -7,6 +7,8 @@ import api from './routes.js';
 import accountRoutes from './routes-account.js';
 import featureRoutes from './routes-features.js';
 import bookingRoutes from './routes-bookings.js';
+import chatRoutes from './routes-chat.js';
+import notifyRoutes from './routes-notify.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -23,6 +25,8 @@ app.use((req, res, next) => {
 
 app.use('/api', accountRoutes);
 app.use('/api', bookingRoutes);
+app.use('/api', chatRoutes);
+app.use('/api', notifyRoutes);
 app.use('/api', featureRoutes);
 app.use('/api', api);
 

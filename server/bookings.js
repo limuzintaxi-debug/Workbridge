@@ -252,6 +252,10 @@ export function bookingView(booking, viewer) {
     city: booking.city || '',
     created_at: booking.created_at,
     updated_at: booking.updated_at,
+    // When the business confirmed a driver, so the admin list can show it even
+    // after the ride is completed.
+    confirmed_at:
+      (booking.events || []).find((event) => event.status === 'confirmed')?.at || null,
     offers,
     offer_count: validOffers(booking).length,
     eligible_driver_count: eligibleCount,
@@ -282,7 +286,14 @@ export function bookingView(booking, viewer) {
       complete_order: isSelectedDriver && booking.status === 'dropoff',
       pay: isBusinessOwner && booking.status === 'complete_order',
       finalize: (isBusinessOwner || isSelectedDriver) && booking.status === 'paid',
-      cancel: isBusinessOwner && ['created', 'offers', 'selected'].includes(booking.status)
+      cancel: isBusinessOwner && ['created', 'offers', 'selected'].includes(booking.status),
+      // Chat exists only for these two parties, and only once the business has
+      // confirmed the driver (status 'selected' or later).
+      chat:
+        Boolean(booking.selected_driver_id) &&
+        booking.status !== 'cancelled' &&
+        stageIndex(booking.status) >= stageIndex('selected') &&
+        (isBusinessOwner || isSelectedDriver)
     }
   };
 
