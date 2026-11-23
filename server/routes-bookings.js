@@ -22,6 +22,7 @@ import {
   eligibleDriver,
   eligibleDrivers,
   driverProfile,
+  ensureWorkerProfile,
   nextBookingRef,
   pushEvent,
   roundMoney,
@@ -578,8 +579,9 @@ router.patch('/admin/drivers/:id/booking', requireRole('admin', 'owner'), async 
   const db = data();
   const user = db.users.find((u) => u.id === req.params.id && u.role === 'worker');
   if (!user) return fail(res, 404, 'not_found', 'Driver not found.');
-  const profile = driverProfile(user.id);
-  if (!profile) return fail(res, 404, 'not_found', 'Driver profile not found.');
+  // Create the profile when the account predates it instead of answering 404:
+  // the driver exists, so an admin must be able to assign their categories.
+  const profile = ensureWorkerProfile(user);
   if (!inScope(req.user, { country: profile.country, city: profile.city })) {
     return fail(res, 403, 'out_of_scope', 'This driver is outside your assigned area.');
   }

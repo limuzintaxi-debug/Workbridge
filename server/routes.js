@@ -12,6 +12,7 @@ import {
 import { publicUser, profileFor } from './middleware.js';
 import { persistenceDriver, supabaseConfigured } from './supabase.js';
 import { inScope } from './scope.js';
+import { ensureWorkerProfile } from './bookings.js';
 import {
   CATEGORIES,
   INSTITUTION_TYPES,
@@ -247,6 +248,9 @@ router.post('/auth/register', (req, res) => {
       return fail(res, 400, 'invalid_category', 'Choose a valid work category.');
     }
     db.workerProfiles.push({
+      // The Supabase mirror keys every row by its own id ({id, doc}). A profile
+      // without one can never be upserted or deleted, so it vanished on reload.
+      id: user.id,
       user_id: user.id,
       category,
       aqama_masked: maskAqama(body.aqama),
@@ -329,7 +333,9 @@ router.patch('/auth/profile', requireRole('worker', 'business'), async (req, res
   if (body.phone) user.phone = str(body.phone, 40);
 
   if (user.role === 'worker') {
-    const profile = db.workerProfiles.find((p) => p.user_id === user.id);
+    // Create the row when the account predates it: skipping the block is what
+    // made the availability save answer 200 while changing nothing.
+    const profile = ensureWorkerProfile(user);
     if (profile) {
       if (body.category && CATEGORIES.includes(str(body.category, 60))) {
         profile.category = str(body.category, 60);
@@ -1051,7 +1057,7 @@ router.patch('/admin/users/:id', requireRole('admin'), (req, res) => {
   }
 
   if (user.role === 'worker') {
-    const profile = db.workerProfiles.find((p) => p.user_id === user.id);
+    const profile = ensureWorkerProfile(user);
     if (profile) {
       if (body.category !== undefined) {
         const category = str(body.category, 60);
