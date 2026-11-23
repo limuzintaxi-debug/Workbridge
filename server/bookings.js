@@ -69,7 +69,48 @@ export const isBookingRecord = (booking) =>
   Boolean(booking && (booking.kind === 'business' || booking.kind === 'customer'));
 
 export function driverProfile(userId) {
-  return data().workerProfiles.find((profile) => profile.user_id === userId) || null;
+  if (!userId) return null;
+  const profiles = data().workerProfiles || [];
+  // Accept either key: rows written by the current code carry user_id, while
+  // older ones were keyed by the profile id. A driver must never be "not found"
+  // just because the two identifiers disagree.
+  return (
+    profiles.find((profile) => profile && profile.user_id === userId) ||
+    profiles.find((profile) => profile && profile.id === userId) ||
+    null
+  );
+}
+
+/**
+ * Returns the driver's worker profile, creating it when the row is missing.
+ *
+ * Registration writes a profile, but accounts imported from Supabase or created
+ * before the id fix can exist without one. Skipping the update (or answering
+ * 404) for those accounts is what made "Enable for Work" and the admin category
+ * assignment look like they never saved.
+ */
+export function ensureWorkerProfile(user) {
+  const existing = driverProfile(user.id);
+  if (existing) {
+    // Repair a legacy row in place so the Supabase mirror can key it.
+    if (!existing.id) existing.id = user.id;
+    if (!existing.user_id) existing.user_id = user.id;
+    return existing;
+  }
+  const created = {
+    id: user.id,
+    user_id: user.id,
+    category: '',
+    aqama_masked: '',
+    city: '',
+    country: '',
+    experience_years: 0,
+    skills: [],
+    bio: '',
+    available: true
+  };
+  data().workerProfiles.push(created);
+  return created;
 }
 
 function rideSettings() {
