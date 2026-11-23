@@ -87,7 +87,16 @@ export function saveSettings(patch) {
 let syncing = false;
 let syncDirty = false;
 const lastSynced = new Map();
-const syncStatus = { last_error: null, last_synced_at: null, pending: false };
+const syncStatus = {
+  last_error: null,
+  last_error_at: null,
+  last_synced_at: null,
+  pending: false,
+  // Collections whose Supabase table does not exist yet. They live in the local
+  // cache only, and are reported through /api/health instead of failing every
+  // write silently.
+  missing_tables: []
+};
 
 function snapshot(rows) {
   const map = new Map();
@@ -114,6 +123,10 @@ async function flushToSupabase() {
   syncStatus.pending = true;
   try {
     for (const [collection, table] of Object.entries(COLLECTION_TABLES)) {
+      // A collection with no table is reported through /api/health; skipping it
+      // here lets the remaining collections persist instead of failing the
+      // whole flush on every write.
+      if (syncStatus.missing_tables.includes(collection)) continue;
       const rows = state[collection] || [];
       const previous = lastSynced.get(collection) || new Map();
       const changed = rows.filter((row) => previous.get(row.id) !== JSON.stringify(row));
@@ -129,6 +142,7 @@ async function flushToSupabase() {
     syncStatus.last_synced_at = nowIso();
   } catch (error) {
     syncStatus.last_error = error.message;
+    syncStatus.last_error_at = nowIso();
     console.error('[workbridge] Supabase sync failed:', error.message);
   } finally {
     syncing = false;
@@ -442,7 +456,15 @@ export async function initStore() {
 
   if (persistenceDriver() === 'supabase') {
     try {
-      loaded = await loadState();
+      const result = await loadState();
+      loaded = result.state;
+      syncStatus.missing_tables = result.missing;
+      if (result.missing.length) {
+        console.error(
+          `[workbridge] Supabase has no table for: ${result.missing.join(', ')}. ` +
+            'Those collections are not persisted until the tables are created.'
+        );
+      }
       if (!loaded) {
         const settingsRow = await loadSettingsRow().catch(() => null);
         if (settingsRow) loaded = { settings: settingsRow };
@@ -450,6 +472,7 @@ export async function initStore() {
       console.log('[workbridge] loaded state from Supabase.');
     } catch (error) {
       syncStatus.last_error = error.message;
+      syncStatus.last_error_at = nowIso();
       console.error(`[workbridge] Supabase load failed: ${error.message}`);
     }
   }
@@ -521,15 +544,27 @@ export function resetForTests() {
   return state;
 }
 
-export const storeInfo = () => ({
-  driver: persistenceDriver(),
-  auth_driver: persistenceDriver() === 'supabase' && config.supabaseAnonKey ? 'supabase-auth' : 'local',
-  // Always reported: this is the local cache file the app writes on every change,
-  // and the only copy of the data while the database rejects writes.
-  file: DB_FILE,
-  sync: { ...syncStatus },
-  initialised_at: nowIso()
-});
+export const storeInfo = () => {
+  const driver = persistenceDriver();
+  // Degraded means "the app answers, but Supabase is not storing everything":
+  // either a sync error or a collection with no table. Reported explicitly so a
+  // JSON-cache fallback is never mistaken for success.
+  const degraded =
+    driver === 'supabase' && (Boolean(syncStatus.last_error) || syncStatus.missing_tables.length > 0);
+  return {
+    driver,
+    auth_driver: driver === 'supabase' && config.supabaseAnonKey ? 'supabase-auth' : 'local',
+    degraded,
+    degraded_reason: degraded
+      ? syncStatus.last_error || `missing tables: ${syncStatus.missing_tables.join(', ')}`
+      : null,
+    // Always reported: this is the local cache file the app writes on every change,
+    // and the only copy of the data while the database rejects writes.
+    file: DB_FILE,
+    sync: { ...syncStatus },
+    initialised_at: nowIso()
+  };
+};
 
 export function audit(actorId, action, target, meta) {
   data().auditLog.unshift({

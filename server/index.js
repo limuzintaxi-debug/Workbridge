@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'node:path';
 import { config, supabaseConfigured } from './config.js';
-import { initStore } from './store.js';
+import { initStore, storeInfo } from './store.js';
 import { attachSession } from './middleware.js';
 import api from './routes.js';
 import accountRoutes from './routes-account.js';
@@ -31,7 +31,19 @@ app.use('/api', featureRoutes);
 app.use('/api', api);
 
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, service: 'workbridge', time: new Date().toISOString() });
+  const persistence = storeInfo();
+  const degraded = Boolean(persistence.degraded);
+  // Always HTTP 200: the container is up and serving, and a non-200 here would
+  // fail the hosting health check. `ok: false` reports that Supabase is not
+  // storing every collection, so a JSON-cache fallback is visible to monitoring
+  // instead of looking like a healthy app.
+  res.json({
+    ok: !degraded,
+    status: degraded ? 'degraded' : 'ok',
+    service: 'workbridge',
+    persistence,
+    time: new Date().toISOString()
+  });
 });
 
 const publicDir = path.join(config.root, 'public');

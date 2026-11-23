@@ -80,32 +80,43 @@ async function request(path, { method = 'GET', body, extraHeaders } = {}) {
   return payload;
 }
 
-/** Loads every collection from Supabase. Returns null when the schema is empty. */
+/**
+ * Loads every collection from Supabase.
+ *
+ * A collection whose table does not exist yet is reported in `missing` instead
+ * of failing the whole load: one absent table must never push the entire
+ * application back onto the local JSON cache. Only a total failure throws,
+ * because that means the schema or the credentials are wrong rather than a
+ * single table lagging behind.
+ *
+ * Returns `{ state, missing }`, where `state` is null when every readable
+ * table was empty.
+ */
 export async function loadState() {
   const entries = await Promise.all(
     Object.entries(TABLE_BY_COLLECTION).map(async ([collection, table]) => {
       try {
         const rows = await request(`/rest/v1/${table}?select=id,doc&order=created_at.asc&limit=10000`);
-        return [collection, (rows || []).map((row) => row.doc)];
+        return { collection, rows: (rows || []).map((row) => row.doc), present: true };
       } catch (error) {
         if (error.status === 404 || /relation .* does not exist/i.test(String(error.message))) {
-          return [collection, null];
+          return { collection, rows: [], present: false };
         }
         throw error;
       }
     })
   );
 
-  const missing = entries.filter(([, rows]) => rows === null).map(([collection]) => collection);
-  if (missing.length) {
+  const missing = entries.filter((entry) => !entry.present).map((entry) => entry.collection);
+  if (entries.length && missing.length === entries.length) {
     throw new Error(
-      `supabase_schema_missing: run supabase/schema.sql (missing tables for: ${missing.join(', ')})`
+      `supabase_schema_missing: no WORKBRIDGE table is readable (missing: ${missing.join(', ')})`
     );
   }
 
-  const state = Object.fromEntries(entries);
+  const state = Object.fromEntries(entries.map((entry) => [entry.collection, entry.rows]));
   const hasData = Object.values(state).some((rows) => rows.length > 0);
-  return hasData ? state : null;
+  return { state: hasData ? state : null, missing };
 }
 
 export async function upsertRows(table, rows) {
