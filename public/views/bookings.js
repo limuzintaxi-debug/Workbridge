@@ -663,6 +663,9 @@ function driverRow(driver) {
     <td><label class="check"><input type="checkbox" data-approve="${esc(driver.id)}" ${
       driver.booking_approved ? 'checked' : ''
     } /> Bookings</label></td>
+    <td><label class="check"><input type="checkbox" data-available="${esc(driver.id)}" ${
+      driver.available !== false ? 'checked' : ''
+    } /> Available</label></td>
     <td>${CATEGORIES.map(
       (category) =>
         `<label class="check"><input type="checkbox" data-cat="${esc(category)}" data-driver="${esc(driver.id)}" ${
@@ -691,7 +694,7 @@ export async function adminDriversView(ctx) {
       path: '/admin/drivers',
       body: drivers.length
         ? `<div class="table-wrap"><table class="table">
-            <thead><tr><th>Driver</th><th>Area</th><th>Vehicle</th><th>Approved</th><th>Categories</th><th></th></tr></thead>
+            <thead><tr><th>Driver</th><th>Area</th><th>Vehicle</th><th>Approved</th><th>Available</th><th>Categories</th><th></th></tr></thead>
             <tbody>${drivers.map(driverRow).join('')}</tbody>
           </table></div>`
         : '<div class="empty">No drivers in your assigned area.</div>'
@@ -701,17 +704,25 @@ export async function adminDriversView(ctx) {
         button.addEventListener('click', async () => {
           const id = button.dataset.saveDriver;
           const approved = document.querySelector(`[data-approve="${id}"]`)?.checked === true;
+          const available = document.querySelector(`[data-available="${id}"]`)?.checked === true;
           const categories = [...document.querySelectorAll(`[data-driver="${id}"]`)]
             .filter((input) => input.checked)
             .map((input) => input.dataset.cat);
           button.disabled = true;
           try {
-            await api.patch(`/admin/drivers/${id}/booking`, {
+            const saved = await api.patch(`/admin/drivers/${id}/booking`, {
               booking_approved: approved,
+              available,
               vehicle_categories: categories
             });
-            toast('Driver booking approval saved.');
-            ctx.refresh();
+            // Report what storage actually kept, never just what was clicked.
+            const kept = saved?.driver?.vehicle_categories || [];
+            toast(
+              `Saved — ${saved?.driver?.booking_approved ? 'approved' : 'not approved'}, categories: ${
+                kept.length ? kept.join(', ') : 'none'
+              }`
+            );
+            await ctx.refresh();
           } catch (error) {
             toast(error.message, true);
             button.disabled = false;

@@ -9,7 +9,7 @@
  */
 import { Router } from 'express';
 import crypto from 'node:crypto';
-import { data, persist } from './store.js';
+import { data, persist, flushNow } from './store.js';
 import { requireRole, hashPassword } from './security.js';
 import { nowIso, round2, str, num, isEmail } from './util.js';
 import { inScope, normalizeScope } from './scope.js';
@@ -549,7 +549,7 @@ router.post('/bookings/:id/finalize', (req, res) => {
 
 /* -------------------------------------------------------------------- admin */
 
-router.get('/admin/drivers', requireRole('admin'), (req, res) => {
+router.get('/admin/drivers', requireRole('admin', 'owner'), (req, res) => {
   const db = data();
   const rows = db.users
     .filter((u) => u.role === 'worker')
@@ -565,6 +565,7 @@ router.get('/admin/drivers', requireRole('admin'), (req, res) => {
         city: profile.city || '',
         vehicle_name: profile.vehicle_name || '',
         booking_approved: profile.booking_approved === true,
+        available: profile.available !== false,
         vehicle_categories: Array.isArray(profile.vehicle_categories) ? profile.vehicle_categories : [],
         ride_booking_enabled: u.ride_booking_enabled === true
       };
@@ -573,7 +574,7 @@ router.get('/admin/drivers', requireRole('admin'), (req, res) => {
   res.json({ drivers: rows, categories: VEHICLE_CATEGORIES });
 });
 
-router.patch('/admin/drivers/:id/booking', requireRole('admin'), (req, res) => {
+router.patch('/admin/drivers/:id/booking', requireRole('admin', 'owner'), async (req, res) => {
   const db = data();
   const user = db.users.find((u) => u.id === req.params.id && u.role === 'worker');
   if (!user) return fail(res, 404, 'not_found', 'Driver not found.');
@@ -587,6 +588,12 @@ router.patch('/admin/drivers/:id/booking', requireRole('admin'), (req, res) => {
     profile.booking_approved = Boolean(body.booking_approved);
     user.ride_booking_enabled = Boolean(body.booking_approved);
   }
+  // An explicit switch wins over the approval shorthand, so an admin can pause a
+  // driver for bookings without clearing their approved categories.
+  if (body.ride_booking_enabled !== undefined) {
+    user.ride_booking_enabled = Boolean(body.ride_booking_enabled);
+  }
+  if (body.available !== undefined) profile.available = Boolean(body.available);
   if (body.vehicle_categories !== undefined) {
     const list = Array.isArray(body.vehicle_categories)
       ? body.vehicle_categories
@@ -594,11 +601,17 @@ router.patch('/admin/drivers/:id/booking', requireRole('admin'), (req, res) => {
     profile.vehicle_categories = [...new Set(list.map((c) => str(c, 40)).filter((c) => VEHICLE_CATEGORIES.includes(c)))];
   }
   if (body.vehicle_name !== undefined) profile.vehicle_name = str(body.vehicle_name, 120);
-  persist();
+  // Persist before answering: the categories and availability must reach storage
+  // before the dashboard reports them as saved.
+  const saved = await flushNow();
+  if (!saved.ok) {
+    return fail(res, 503, 'storage_failed', `Driver settings could not be saved: ${saved.error}`);
+  }
   res.json({
     driver: {
       id: user.id,
       booking_approved: profile.booking_approved === true,
+      available: profile.available !== false,
       vehicle_categories: profile.vehicle_categories || [],
       ride_booking_enabled: user.ride_booking_enabled === true
     }

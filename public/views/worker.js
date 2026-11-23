@@ -322,7 +322,15 @@ async function profile(ctx) {
       </div>
       <div class="field"><label for="skills">Skills (comma separated)</label><input id="skills" name="skills" value="${esc((profile.skills || []).join(', '))}" maxlength="400" /></div>
       <div class="field"><label for="bio">Short introduction</label><textarea id="bio" name="bio" maxlength="1000">${esc(profile.bio || '')}</textarea></div>
-      <div class="field"><label><input type="checkbox" name="available" ${profile.available ? 'checked' : ''} style="width:auto;min-height:0;margin-right:8px" />Available for work</label></div>
+      <div class="field"><label><input type="checkbox" id="available" name="available" ${profile.available !== false ? 'checked' : ''} style="width:auto;min-height:0;margin-right:8px" />Enable for Work — available for new jobs and ride bookings</label>
+        <div class="hint">Switch this off to stop receiving new work and ride requests.</div></div>
+      <div class="card" style="background:#f6f8fb;box-shadow:none">
+        <div><strong>Enable for Work:</strong> ${profile.available !== false ? 'On' : 'Off'}</div>
+        <div><strong>Booking approval:</strong> ${profile.booking_approved ? 'Approved by admin' : 'Not approved yet'}</div>
+        <div><strong>Approved vehicle categories:</strong> ${
+          (profile.vehicle_categories || []).length ? esc(profile.vehicle_categories.join(', ')) : 'None assigned yet'
+        }</div>
+      </div>
       <button class="btn btn-primary" type="submit">Save profile</button>
     </form>
   </div>`;
@@ -339,6 +347,10 @@ async function profile(ctx) {
         try {
           const res = await api.patch('/auth/profile', formObject(form));
           ctx.setUser(res.user);
+          // Re-read the stored profile so the form shows what was actually saved,
+          // not the values this page was rendered with.
+          const me = await api.get('/auth/me');
+          if (me && me.user) ctx.setUser(me.user);
           toast('Profile saved', 'success');
           await ctx.refresh();
         } catch (error) {

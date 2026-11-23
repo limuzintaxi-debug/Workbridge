@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import crypto from 'node:crypto';
 import { config } from './config.js';
-import { data, persist, nextCounter, storeInfo } from './store.js';
+import { data, persist, nextCounter, storeInfo, flushNow } from './store.js';
 import {
   hashPassword,
   verifyPassword,
@@ -321,7 +321,7 @@ router.get('/auth/me', (req, res) => {
   return res.json(sessionPayload(req.user));
 });
 
-router.patch('/auth/profile', requireRole('worker', 'business'), (req, res) => {
+router.patch('/auth/profile', requireRole('worker', 'business'), async (req, res) => {
   const body = req.body || {};
   const db = data();
   const user = db.users.find((u) => u.id === req.user.id);
@@ -361,7 +361,12 @@ router.patch('/auth/profile', requireRole('worker', 'business'), (req, res) => {
       if (body.about !== undefined) profile.about = str(body.about, 1000);
     }
   }
-  persist();
+  // Await the real storage write. Answering "saved" for a rejected Supabase
+  // write is what made the driver's availability revert after a reload.
+  const saved = await flushNow();
+  if (!saved.ok) {
+    return fail(res, 503, 'storage_failed', `Profile could not be saved: ${saved.error}`);
+  }
   res.json(sessionPayload(user));
 });
 
