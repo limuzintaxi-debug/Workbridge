@@ -270,6 +270,9 @@ router.post('/auth/register', (req, res) => {
   } else {
     const companyName = str(body.company_name, 160) || fullName;
     db.businessProfiles.push({
+      // Same row-key rule as worker profiles: without an id the Supabase mirror
+      // cannot upsert the row, so the business profile was lost on reload.
+      id: user.id,
       user_id: user.id,
       company_name: companyName,
       contact_name: fullName,

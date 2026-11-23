@@ -40,10 +40,20 @@ export function profileFor(user) {
   if (!user) return null;
   const db = data();
   if (user.role === 'worker') {
-    return db.workerProfiles.find((p) => p.user_id === user.id) || null;
+    // Match on either key: a legacy or repaired row may carry only its own id,
+    // and a strict user_id match made the profile look absent to its owner.
+    return (
+      db.workerProfiles.find((p) => p && p.user_id === user.id) ||
+      db.workerProfiles.find((p) => p && p.id === user.id) ||
+      null
+    );
   }
   if (user.role === 'business') {
-    return db.businessProfiles.find((p) => p.user_id === user.id) || null;
+    return (
+      db.businessProfiles.find((p) => p && p.user_id === user.id) ||
+      db.businessProfiles.find((p) => p && p.id === user.id) ||
+      null
+    );
   }
   return null;
 }
