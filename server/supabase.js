@@ -32,7 +32,9 @@ const TABLE_BY_COLLECTION = {
   rideBookings: 'ride_bookings',
   mallVehicles: 'mall_vehicles',
   mallShops: 'mall_shops',
-  mallProducts: 'mall_products'
+  mallProducts: 'mall_products',
+  chatMessages: 'chat_messages',
+  pushSubscriptions: 'push_subscriptions'
 };
 
 export const COLLECTION_TABLES = TABLE_BY_COLLECTION;
