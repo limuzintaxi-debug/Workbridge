@@ -57,18 +57,6 @@ async function overview(ctx) {
       </div>
       <div>
         <div class="card">
-          <h3>My profile</h3>
-          <dl class="kv">
-            <dt>Name</dt><dd>${esc(ctx.user.full_name)}</dd>
-            <dt>Category</dt><dd>${esc(profile.category || '—')}</dd>
-            <dt>City</dt><dd>${esc(profile.city || '—')}</dd>
-            <dt>Aqama</dt><dd>${esc(profile.aqama_masked || '—')}</dd>
-            <dt>Platform commission</dt><dd>${Number(commission.rate) > 0 ? `${commission.rate}% (paid by ${esc(commission.payer)})` : '0% — no commission charged'}</dd>
-            <dt>Available</dt><dd>${profile.available ? 'Yes' : 'No'}</dd>
-          </dl>
-          <a class="btn btn-ghost btn-sm" href="#/worker/profile">Edit profile</a>
-        </div>
-        <div class="card">
           <h3>Notifications <span class="badge badge-24h">${notifRes.unread || 0}</span></h3>
           ${
             (notifRes.notifications || []).slice(0, 3).map((n) => `<p style="margin-bottom:8px"><strong>${esc(n.title)}</strong><br /><span class="muted">${esc(n.body)}</span></p>`).join('') ||
