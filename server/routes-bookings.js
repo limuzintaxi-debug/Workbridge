@@ -14,6 +14,7 @@ import { requireRole, hashPassword } from './security.js';
 import { nowIso, round2, str, num, isEmail } from './util.js';
 import { inScope, normalizeScope } from './scope.js';
 import { currentCommission } from './commission.js';
+import { notifyUser, notifyRoles } from './notifications.js';
 import {
   VEHICLE_CATEGORIES,
   STATUS_LABELS,
@@ -35,16 +36,8 @@ function fail(res, status, error, message) {
   return res.status(status).json({ error, message });
 }
 
-function notify(userId, title, body, link) {
-  data().notifications.unshift({
-    id: crypto.randomUUID(),
-    user_id: userId,
-    title,
-    body,
-    link: link || null,
-    read_at: null,
-    created_at: nowIso()
-  });
+function notify(userId, title, body, link, extra = {}) {
+  return notifyUser(userId, { title, body, link: link || null, ...extra });
 }
 
 /** Business bookings and customer "Book Your Car" bookings share one pipeline. */
@@ -147,9 +140,18 @@ router.post('/bookings', bookingBusiness, (req, res) => {
       driver.id,
       'New booking request',
       `${booking.pickup} → ${booking.destination} · ${category}`,
-      '#/worker/bookings'
+      '#/worker/bookings',
+      { kind: 'booking', booking_id: booking.id }
     );
   }
+
+  notifyRoles(['admin', 'owner'], {
+    title: 'New booking created',
+    body: `${booking.ref}: ${booking.pickup} → ${booking.destination} · ${booking.date} ${booking.time}`,
+    link: '#/admin/bookings',
+    kind: 'booking',
+    booking_id: booking.id
+  });
 
   persist();
   res.status(201).json({ booking: bookingView(booking, req.user), notified_drivers: drivers.length });
@@ -330,6 +332,24 @@ router.post('/bookings/:id/offers', requireRole('worker'), (req, res) => {
   if (booking.status === 'created') pushEvent(booking, 'offers', req.user);
   else booking.updated_at = nowIso();
 
+  // The business hears about every offer straight away. This is what makes an
+  // offer "reach" the dashboard: the bell, the badge and the offer list all
+  // update from this record instead of waiting for a manual refresh.
+  notify(
+    booking.business_id,
+    existing ? 'Driver updated their offer' : 'New driver offer received',
+    `${vehicleName} — ${price} ${booking.currency} · ${booking.ref}`,
+    '#/business/bookings',
+    { kind: 'offer', booking_id: booking.id }
+  );
+  notifyRoles(['admin', 'owner'], {
+    title: 'New driver offer submitted',
+    body: `${vehicleName} — ${price} ${booking.currency} · ${booking.ref}`,
+    link: '#/admin/bookings',
+    kind: 'offer',
+    booking_id: booking.id
+  });
+
   persist();
   res.status(201).json({ booking: bookingView(booking, req.user) });
 });
@@ -362,8 +382,16 @@ router.post('/bookings/:id/accept', requireRole('worker'), (req, res) => {
     booking.business_id,
     'Booking confirmed',
     `${booking.ref}: your driver accepted. Contact details are now available.`,
-    '#/business/bookings'
+    '#/business/bookings',
+    { kind: 'confirmed', booking_id: booking.id }
   );
+  notifyRoles(['admin', 'owner'], {
+    title: 'Booking confirmed',
+    body: `${booking.ref} · ${booking.business_name || 'Business'} → ${req.user.full_name || 'Driver'}`,
+    link: '#/admin/bookings',
+    kind: 'confirmed',
+    booking_id: booking.id
+  });
   persist();
   res.json({ booking: bookingView(booking, req.user) });
 });
@@ -479,9 +507,17 @@ router.post('/bookings/:id/payment', bookingPayer, (req, res) => {
       booking.selected_driver_id,
       'Payment received',
       `${booking.ref}: ${amount} ${booking.currency} received.`,
-      '#/worker/bookings'
+      '#/worker/bookings',
+      { kind: 'payment', booking_id: booking.id }
     );
   }
+  notifyRoles(['admin', 'owner'], {
+    title: commissionAmount > 0 ? 'Payment and commission recorded' : 'Payment recorded',
+    body: `${booking.ref} · ${amount} ${booking.currency} · commission ${commissionAmount} ${booking.currency} (${rate}%)`,
+    link: '#/admin/bookings',
+    kind: 'payment',
+    booking_id: booking.id
+  });
   persist();
   res.json({ booking: bookingView(booking, req.user) });
 });
