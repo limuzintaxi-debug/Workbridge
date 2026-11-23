@@ -21,6 +21,7 @@ import {
   pushEvent,
   customerBookingView,
   nextBookingRef,
+  nextRideRef,
   newBookingId,
   validOffers,
   openOffers
@@ -300,7 +301,7 @@ router.post('/ride-bookings', (req, res) => {
   // eligible driver can price it and the customer picks the driver they want.
   const booking = {
     id: newBookingId(),
-    ref: nextBookingRef(),
+    ref: nextRideRef(),
     kind: 'customer',
     status: 'created',
     business_id: null,

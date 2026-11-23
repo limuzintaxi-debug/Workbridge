@@ -412,6 +412,19 @@ export function nextBookingRef() {
   return `BK-${db.meta.counters.booking}`;
 }
 
+/**
+ * Public customer ride bookings keep their own WB-RIDE reference series so a
+ * customer-facing ride is distinguishable from a business booking, while both
+ * share one counter and therefore never collide.
+ */
+export function nextRideRef() {
+  const db = data();
+  if (!db.meta.counters) db.meta.counters = {};
+  const current = Number(db.meta.counters.booking) || 1000;
+  db.meta.counters.booking = current + 1;
+  return `WB-RIDE-${db.meta.counters.booking}`;
+}
+
 export function newBookingId() {
   return crypto.randomUUID();
 }
