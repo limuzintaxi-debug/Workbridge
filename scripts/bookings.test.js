@@ -556,9 +556,12 @@ try {
   });
 
   await step('the bell needs a session and the push key is public', async () => {
-    const anonymous = await anon.get('/api/notifications');
+    // A client that never signed in: the setup call earlier signed the anon
+    // helper in, so this uses a brand-new cookie jar.
+    const stranger = client();
+    const anonymous = await stranger.get('/api/notifications');
     assert.equal(anonymous.status, 401, 'the bell requires a signed-in user');
-    const key = await anon.get('/api/push/public-key');
+    const key = await stranger.get('/api/push/public-key');
     assert.equal(key.status, 200, key.text);
     assert.ok(typeof key.json.key === 'string' && key.json.key.length > 40, 'a VAPID public key is served');
   });
