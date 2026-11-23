@@ -347,6 +347,10 @@ export function customerBookingView(booking) {
   const base = bookingView(booking, null);
   const unlocked = contactVisible(booking);
   const finished = phonesHidden(booking);
+  const selectedOffer = booking.selected_offer_id
+    ? (booking.offers || []).find((offer) => offer.id === booking.selected_offer_id) || null
+    : null;
+  const selectedVehicle = booking.selected_vehicle || (selectedOffer && selectedOffer.vehicle_name) || '';
   let selectedDriver = null;
   if (booking.selected_driver_id) {
     const record = driverRecord(booking.selected_driver_id);
