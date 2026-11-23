@@ -34,6 +34,23 @@ export const config = {
   seedDemo: process.env.SEED_DEMO === '1'
 };
 
+/**
+ * Test harnesses must never touch the production database.
+ *
+ * Every suite spawns the server with NODE_ENV=test but spreads `process.env`,
+ * so it inherits the real SUPABASE_* credentials from Settings. That was
+ * harmless only while the database rejected the key with 403 and the app fell
+ * back to the local JSON store; once reads were granted, the suites started
+ * loading live data (the first admin already existed, so setup returned 409)
+ * and a passing suite could write into production. Dropping the credentials
+ * here keeps every test on the local JSON driver regardless of the harness.
+ */
+if (config.nodeEnv === 'test') {
+  config.supabaseUrl = '';
+  config.supabaseAnonKey = '';
+  config.supabaseServiceKey = '';
+}
+
 export const isProduction = config.nodeEnv === 'production';
 
 export function supabaseConfigured() {
