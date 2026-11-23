@@ -711,6 +711,25 @@ export async function adminBookingsView(ctx) {
         .join('')
     : '<tr><td colspan="7" class="muted">No bookings in your area.</td></tr>';
 
+  // Confirmed bookings stay visible after completion, so the admin always has a
+  // record of who was chosen, for what vehicle and at what price.
+  const confirmedRows = bookings.bookings.length
+    ? bookings.bookings
+        .filter((booking) => booking.confirmed_at || booking.selected_driver_name)
+        .map(
+          (booking) => `<tr>
+            <td>${esc(booking.ref || booking.id.slice(0, 8))}</td>
+            <td>${esc(booking.business_name || '')}</td>
+            <td>${esc(booking.selected_driver_name || '—')}</td>
+            <td>${esc(booking.selected_vehicle || '—')}</td>
+            <td>${booking.selected_price ? amount(booking.selected_price, booking.currency) : '—'}</td>
+            <td>${booking.confirmed_at ? esc(fmtDate(booking.confirmed_at)) : '—'}</td>
+            <td>${badge(booking.status)}</td>
+          </tr>`
+        )
+        .join('')
+    : '';
+
   const paymentRows = payments.payments.length
     ? payments.payments
         .map(
@@ -734,7 +753,14 @@ export async function adminBookingsView(ctx) {
       subtitle: 'Only bookings inside your assigned area are shown.',
       tabs,
       path: '/admin/bookings',
-      body: `<h2>Bookings</h2>
+      body: `<h2>Confirmed bookings</h2>
+        <div class="table-wrap"><table class="table">
+          <thead><tr><th>Booking ID</th><th>Business</th><th>Driver</th><th>Vehicle</th><th>Agreed price</th><th>Confirmed</th><th>Status</th></tr></thead>
+          <tbody>${
+            confirmedRows ||
+            '<tr><td colspan="7" class="muted">No confirmed bookings in your area yet.</td></tr>'
+          }</tbody></table></div>
+        <h2 style="margin-top:24px">Bookings</h2>
         <div class="table-wrap"><table class="table">
           <thead><tr><th>Ref</th><th>Business</th><th>Route</th><th>Date</th><th>Category</th><th>Status</th><th>Amount</th></tr></thead>
           <tbody>${bookingRows}</tbody></table></div>
