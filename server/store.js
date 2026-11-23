@@ -319,6 +319,7 @@ export function seedDemo() {
   state.users = [admin, worker, worker2, business];
   state.workerProfiles = [
     {
+      id: worker.id,
       user_id: worker.id,
       category: 'Driver',
       aqama_masked: '•••• 0001',
@@ -329,6 +330,7 @@ export function seedDemo() {
       available: true
     },
     {
+      id: worker2.id,
       user_id: worker2.id,
       category: 'Electrician',
       aqama_masked: '•••• 0002',

@@ -97,7 +97,16 @@ export async function loadState() {
     Object.entries(TABLE_BY_COLLECTION).map(async ([collection, table]) => {
       try {
         const rows = await request(`/rest/v1/${table}?select=id,doc&order=created_at.asc&limit=10000`);
-        return { collection, rows: (rows || []).map((row) => row.doc), present: true };
+        // The row's own primary key is authoritative. Legacy documents stored
+        // without an `id` could never be upserted into or deleted from Supabase,
+        // which is why those profiles disappeared on reload.
+        return {
+          collection,
+          rows: (rows || [])
+            .filter((row) => row && row.doc)
+            .map((row) => (row.doc.id ? row.doc : { ...row.doc, id: row.id })),
+          present: true
+        };
       } catch (error) {
         if (error.status === 404 || /relation .* does not exist/i.test(String(error.message))) {
           return { collection, rows: [], present: false };
