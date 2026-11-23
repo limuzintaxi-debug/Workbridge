@@ -96,6 +96,10 @@ async function waitForServer(timeoutMs = 30000) {
 const server = spawn(process.execPath, ['server/index.js'], {
   env: {
     ...process.env,
+    // Without this the spawned server keeps the real Supabase credentials from
+    // Settings and the suite reads (and writes) the production database.
+    // NODE_ENV=test makes server/config.js drop them and use the local driver.
+    NODE_ENV: 'test',
     PORT: String(PORT),
     DATA_DIR,
     SESSION_SECRET: 'test-secret-value-0123456789',
