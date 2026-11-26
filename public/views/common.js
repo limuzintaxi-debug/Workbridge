@@ -68,12 +68,15 @@ function shareButton(path) {
   return `<button type="button" class="btn btn-ghost btn-sm" data-share-panel="${panel}" data-share-url="${target}">Share link</button>`;
 }
 
-export function panelShell({ title, subtitle, tabs, path, body }) {
+export function panelShell({ title, subtitle, tabs, path, body, actions }) {
   const share = shareButton(path);
+  // Header actions (a panel's primary shortcut) sit on the same row as Share
+  // link, so they are reachable without scrolling to the end of the page.
+  const headActions = [actions, share].filter(Boolean).join('');
   return `<div class="container">
     <div class="section-head"><div><h1>${esc(title)}</h1>${
       subtitle ? `<p class="muted" style="margin:0">${esc(subtitle)}</p>` : ''
-    }</div>${share ? `<div class="btn-row">${share}</div>` : ''}</div>
+    }</div>${headActions ? `<div class="btn-row head-actions">${headActions}</div>` : ''}</div>
     ${tabs ? tabsBar(tabs, path) : ''}
     ${body}
   </div>`;

@@ -2,8 +2,7 @@ import { api } from '../api.js';
 import { esc, toast, busy, formObject, pill, money, fmtDate, empty, ageBadge } from '../ui.js';
 import { panelShell, jobCard, options, statCards, invoiceList } from './common.js';
 
-const TABS = [
-  ['#/business', 'Dashboard'],
+const TABS = [  ['#/business', 'Dashboard'],
   ['#/business/jobs', 'My Listings'],
   ['#/business/workers', 'Find Workers'],
   ['#/business/applications', 'Applications'],
@@ -12,8 +11,8 @@ const TABS = [
   ['#/business/profile', 'Profile']
 ];
 
-function shell(path, title, subtitle, body) {
-  return panelShell({ title, subtitle, tabs: TABS, path, body });
+function shell(path, title, subtitle, body, actions = '') {
+  return panelShell({ title, subtitle, tabs: TABS, path, body, actions });
 }
 
 async function ownJobs() {
@@ -70,12 +69,14 @@ async function overview(ctx) {
             <dt>Platform commission</dt><dd>${Number(commission.rate) > 0 ? `${commission.rate}% (paid by ${esc(commission.payer)})` : '0% — no commission charged'}</dd>
           </dl>
           <a class="btn btn-ghost btn-sm" href="#/business/profile">Edit profile</a>
-          <a class="btn btn-navy book-car-cta" href="#/business/bookings">Book a Car</a>
         </div>
       </div>
     </div>`;
 
-  return { title: 'Business dashboard', html: shell('/business', 'Business dashboard', `Signed in as ${ctx.user.full_name}`, body) };
+  return {
+    title: 'Business dashboard',
+    html: shell('/business', 'Business dashboard', `Signed in as ${ctx.user.full_name}`, body, BOOK_CAR_CTA)
+  };
 }
 
 async function jobs(ctx) {
