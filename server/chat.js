@@ -27,11 +27,13 @@ export function findBooking(id) {
   return (data().rideBookings || []).find((row) => row.id === id && isBookingRecord(row)) || null;
 }
 
-/** Chat opens once the business has confirmed a driver, and never before. */
+/** Chat opens once the business has confirmed a driver, and closes for good
+ * when the ride is over: a completed or cancelled booking keeps its messages
+ * readable in storage but accepts no new ones and offers no chat button. */
 export function chatOpen(booking) {
   if (!booking) return false;
   if (!booking.selected_driver_id) return false;
-  if (booking.status === 'cancelled') return false;
+  if (booking.status === 'cancelled' || booking.status === 'completed') return false;
   return stageIndex(booking.status) >= CHAT_MIN_STAGE;
 }
 

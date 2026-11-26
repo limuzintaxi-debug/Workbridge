@@ -190,7 +190,8 @@ export function contactVisible(booking) {
  * dashboard. The booking record itself (route, dates, price, payment, history)
  * is kept untouched for accounting.
  */
-export const phonesHidden = (booking) => booking.status === 'completed';
+export const phonesHidden = (booking) =>
+  booking.status === 'completed' || booking.status === 'cancelled';
 
 function businessRecord(businessId) {
   const db = data();
@@ -340,6 +341,7 @@ export function bookingView(booking, viewer) {
       chat:
         Boolean(booking.selected_driver_id) &&
         booking.status !== 'cancelled' &&
+        booking.status !== 'completed' &&
         stageIndex(booking.status) >= stageIndex('selected') &&
         (isBusinessOwner || isSelectedDriver)
     }
