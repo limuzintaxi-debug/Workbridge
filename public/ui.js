@@ -169,23 +169,67 @@ export function mountSignaturePad(canvas) {
     });
   }
 
+  const dataUrl = () => (dirty ? canvas.toDataURL('image/png') : null);
+
   return {
     clear,
     isDirty: () => dirty,
-    toDataURL: () => (dirty ? canvas.toDataURL('image/png') : null)
+    // Invoice and agreement forms read the drawn signature through this name;
+    // keep both spellings so neither caller can throw before it reaches the API.
+    dataUrl,
+    toDataURL: dataUrl
   };
 }
 
-export function readImageFile(file) {
+const IMAGE_MAX_SIDE = 1600;
+const IMAGE_MAX_SOURCE = 12_000_000;
+
+/**
+ * Re-encodes an uploaded picture as a JPEG or PNG data URL.
+ *
+ * The PDF writer can only embed JPEG and PNG, while phone pickers happily hand
+ * back WebP, BMP, GIF or HEIC files. Converting here (and flattening any
+ * transparency onto white) means a JPG/JPEG/PNG stamp or signature always
+ * reaches the PDF instead of being dropped as an unsupported data URL.
+ */
+function reencodeImage(file) {
   return new Promise((resolve, reject) => {
-    if (!file) return resolve(null);
-    if (!file.type.startsWith('image/')) return reject(new Error('Please choose an image file.'));
-    if (file.size > 1_400_000) return reject(new Error('Image is too large (max 1.4 MB).'));
     const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
+    reader.onload = () => {
+      const image = new Image();
+      image.onload = () => {
+        try {
+          const width = image.naturalWidth || image.width || 1;
+          const height = image.naturalHeight || image.height || 1;
+          const scale = Math.min(1, IMAGE_MAX_SIDE / Math.max(width, height));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(width * scale));
+          canvas.height = Math.max(1, Math.round(height * scale));
+          const context = canvas.getContext('2d');
+          if (!context) return reject(new Error('Could not read that image.'));
+          context.fillStyle = '#ffffff';
+          context.fillRect(0, 0, canvas.width, canvas.height);
+          context.drawImage(image, 0, 0, canvas.width, canvas.height);
+          const png = /^image\/png$/i.test(file.type);
+          resolve(canvas.toDataURL(png ? 'image/png' : 'image/jpeg', 0.92));
+        } catch (error) {
+          reject(new Error('Could not read that image.'));
+        }
+      };
+      image.onerror = () =>
+        reject(new Error('That image format is not supported. Please use a JPG, JPEG or PNG file.'));
+      image.src = String(reader.result);
+    };
     reader.onerror = () => reject(new Error('Could not read that image.'));
     reader.readAsDataURL(file);
   });
+}
+
+export async function readImageFile(file) {
+  if (!file) return null;
+  if (!file.type.startsWith('image/')) throw new Error('Please choose an image file.');
+  if (file.size > IMAGE_MAX_SOURCE) throw new Error('Image is too large (max 12 MB).');
+  return reencodeImage(file);
 }
 
 export function money0(amount, currency) {

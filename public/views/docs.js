@@ -462,7 +462,7 @@ async function newInvoice(ctx) {
 
       <h3>Work / services</h3>
       <div class="invoice-rows" id="invoice-rows">
-        ${[0, 1, 2]
+        ${[0]
           .map(
             () => `<div class="invoice-row">
           <div class="field"><label>Description</label><input name="description" maxlength="200" placeholder="Service description" /></div>
