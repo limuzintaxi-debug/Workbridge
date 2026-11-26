@@ -950,7 +950,9 @@ try {
     assert.ok(!businessCard.includes('stage-list'), 'no numbered stage list under a booking');
     assert.ok(!businessCard.includes('data-stage'), 'action buttons stay out of the business dashboard');
     assert.ok(src.includes('function stageStrip'), 'the business dashboard keeps one compact status line');
-    assert.ok(src.includes('${stageStrip()}'), 'the status line is placed on the business dashboard');
+    // The owner asked for the text-only workflow line to be removed from the
+    // Book a Car page, so only the unused definition may remain.
+    assert.ok(!src.includes('${stageStrip()}'), 'no workflow text line above Book a Car');
 
     // The driver dashboard replaced the list with real action buttons.
     const driverStart = src.indexOf('export async function driverBookingsView');

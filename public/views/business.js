@@ -70,6 +70,7 @@ async function overview(ctx) {
             <dt>Platform commission</dt><dd>${Number(commission.rate) > 0 ? `${commission.rate}% (paid by ${esc(commission.payer)})` : '0% — no commission charged'}</dd>
           </dl>
           <a class="btn btn-ghost btn-sm" href="#/business/profile">Edit profile</a>
+          <a class="btn btn-navy book-car-cta" href="#/business/bookings">Book a Car</a>
         </div>
       </div>
     </div>`;

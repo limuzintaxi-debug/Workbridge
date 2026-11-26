@@ -7,7 +7,7 @@
 
 const DICT = {
   en: {
-    'brand.tagline': 'Booking • Agreement • Institutional & Social Support • Invoice Maker',
+    'brand.tagline': 'WORKBRIDGE BUSINESS ORGANIZATION',
     'brand.sub': 'Connecting Workers, Businesses & Support Organizations',
     'brand.actions': 'Find Work • Make Agreements • Create Invoices',
     'nav.dashboard': 'Dashboard',
@@ -124,7 +124,7 @@ const DICT = {
     'docs.companyStamp': 'Company stamp (optional)'
   },
   ar: {
-    'brand.tagline': 'الحجز • الاتفاق • الدعم المؤسسي والاجتماعي • إنشاء الفواتير',
+    'brand.tagline': 'WORKBRIDGE BUSINESS ORGANIZATION',
     'brand.sub': 'نربط العاملين والشركات ومنظمات الدعم',
     'brand.actions': 'ابحث عن عمل • أبرم اتفاقاً • أنشئ فاتورة',
     'nav.dashboard': 'لوحة التحكم',

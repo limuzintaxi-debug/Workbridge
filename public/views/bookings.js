@@ -271,16 +271,18 @@ export async function businessBookingsView(ctx) {
     subtitle: 'Create a booking, compare driver offers and confirm your driver.',
     tabs,
     path: '/business/bookings',
-    body: `${stageStrip()}
+    body: `
       <div class="btn-row" id="booking-switch" style="margin:16px 0">
         <button class="btn btn-navy" type="button" data-pane="create">Create Booking</button>
         <button class="btn btn-ghost" type="button" data-pane="history">History</button>
       </div>
-      <div data-pane-body="create" hidden>${form}</div>
-      <div data-pane-body="history">
+      <div data-pane-body="current">
         <h2>Active bookings</h2>
         ${activeBookings.length ? activeBookings.map(businessCard).join('') : '<div class="empty">No active bookings.</div>'}
-        <h2 style="margin-top:24px">History</h2>
+      </div>
+      <div data-pane-body="create" hidden>${form}</div>
+      <div data-pane-body="history" hidden>
+        <h2>Booking history</h2>
         ${pastBookings.length ? pastBookings.map(businessCard).join('') : '<div class="empty">No previous bookings.</div>'}
       </div>`
   });
@@ -289,15 +291,18 @@ export async function businessBookingsView(ctx) {
     title: 'Book a Car',
     html,
     mount: () => {
-      // The form stays closed until Create Booking is pressed.
+      // The form stays closed until Create Booking is pressed; pressing the open
+      // section again returns to the live bookings list.
       for (const button of document.querySelectorAll('#booking-switch [data-pane]')) {
         button.addEventListener('click', () => {
           const target = button.dataset.pane;
-          for (const pane of document.querySelectorAll('[data-pane-body]')) {
-            pane.hidden = pane.dataset.paneBody !== target;
+          const pane = document.querySelector(`[data-pane-body="${target}"]`);
+          const show = pane && !pane.hidden ? 'current' : target;
+          for (const body of document.querySelectorAll('[data-pane-body]')) {
+            body.hidden = body.dataset.paneBody !== show;
           }
           for (const other of document.querySelectorAll('#booking-switch [data-pane]')) {
-            const on = other === button;
+            const on = other === button && show === target;
             other.classList.toggle('btn-navy', on);
             other.classList.toggle('btn-ghost', !on);
           }

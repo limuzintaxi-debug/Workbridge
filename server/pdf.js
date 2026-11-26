@@ -406,7 +406,7 @@ function header(doc, title, reference, dateLabel) {
   doc.rect(0, 0, PAGE_W, 74, { fill: NAVY });
   doc.rect(0, 74, PAGE_W, 3, { fill: ORANGE });
   doc.text('WORKBRIDGE', 40, 34, { size: 19, bold: true, color: [1, 1, 1] });
-  doc.text('Booking • Agreement • Institutional & Social Support • Invoice Maker', 40, 52, {
+  doc.text('WORKBRIDGE BUSINESS ORGANIZATION', 40, 52, {
     size: 8,
     color: [0.85, 0.88, 0.94]
   });
