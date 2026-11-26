@@ -414,7 +414,7 @@ router.get('/jobs/:id', requireRole('worker', 'business', 'admin'), (req, res) =
         const worker = data().users.find((u) => u.id === a.worker_id);
         const profile = data().workerProfiles.find((p) => p.user_id === a.worker_id);
         return {
-          ...a,
+          ...withoutEmail(a),
           worker_name: worker?.full_name || 'Worker',
           worker_phone: worker?.phone || '',
           worker_category: profile?.category || '',
@@ -529,7 +529,7 @@ router.get('/applications', requireRole('worker', 'business', 'admin'), (req, re
     const worker = db.users.find((u) => u.id === a.worker_id);
     const profile = db.workerProfiles.find((p) => p.user_id === a.worker_id);
     return {
-      ...a,
+      ...withoutEmail(a),
       job_title: job?.title || 'Listing removed',
       job_category: job?.category || '',
       job_status: job?.status || 'removed',
@@ -581,6 +581,17 @@ router.patch('/applications/:id', requireRole('worker', 'business'), (req, res) 
 
 /* ------------------------------------------------------------------ workers */
 
+/**
+ * Business-facing worker data never carries the worker's email address. The
+ * address is only ever used for sign-in and password recovery, so it is removed
+ * here — including from spread records such as stored applications — instead of
+ * relying on each template to forget it.
+ */
+function withoutEmail(row) {
+  const { email, worker_email, applicant_email, user_email, ...rest } = row || {};
+  return rest;
+}
+
 router.get('/workers', requireRole('business', 'admin'), (req, res) => {
   const db = data();
   const q = str(req.query.q, 120).toLowerCase();
@@ -602,6 +613,7 @@ router.get('/workers', requireRole('business', 'admin'), (req, res) => {
       created_at: user?.created_at || null
     };
   });
+  rows = rows.map(withoutEmail);
   if (category) rows = rows.filter((w) => w.category === category);
   if (q) {
     rows = rows.filter(

@@ -400,6 +400,21 @@ export async function businessBookingsView(ctx) {
           }
         });
       }
+
+      // Offers arrive from other drivers while this page is open. The server
+      // saves each offer and notifies in the same request, so re-reading the
+      // live list is enough to show them; without this the dashboard kept a
+      // stale copy until the business navigated away and back. One re-read at a
+      // time, never while the create form has focus, so typing is not lost.
+      if (activeBookings.some((booking) => ['created', 'offers'].includes(booking.status))) {
+        const timer = setInterval(() => {
+          if (document.hidden) return;
+          const focused = document.activeElement;
+          if (focused && ['INPUT', 'TEXTAREA', 'SELECT'].includes(focused.tagName)) return;
+          clearInterval(timer);
+          ctx.refresh();
+        }, 8000);
+      }
     }
   };
 }
@@ -550,8 +565,20 @@ export async function driverBookingsView(ctx) {
   // business dashboard keeps its past bookings out of the live list. The list
   // itself comes from /bookings/driver/mine, which the server scopes to the
   // signed-in driver, so a driver only ever sees their own rides.
-  const currentBookings = mine.bookings.filter(isActiveBooking);
-  const pastBookings = mine.bookings.filter((booking) => !isActiveBooking(booking));
+  // The live list holds only rides the customer actually assigned to this
+  // driver and that are still running. Open requests the driver has merely
+  // offered on stay in "Open booking requests" above, and finished or cancelled
+  // rides go to Booking History — never both places at once.
+  const me = ctx && ctx.user ? ctx.user.id : null;
+  const assignedToMe = (booking) => Boolean(booking && me && booking.selected_driver_id === me);
+  const isClosed = (booking) =>
+    ['completed', 'cancelled'].includes(String((booking && booking.status) || '').toLowerCase());
+  const currentBookings = mine.bookings.filter(
+    (booking) => assignedToMe(booking) && isActiveBooking(booking)
+  );
+  const pastBookings = mine.bookings.filter(
+    (booking) => isClosed(booking) || (assignedToMe(booking) && !isActiveBooking(booking))
+  );
 
   const currentHtml = currentBookings.length
     ? currentBookings.map((booking) => driverCard(booking)).join('')
