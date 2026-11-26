@@ -2,7 +2,12 @@ import { api } from '../api.js';
 import { esc, toast, busy, formObject, pill, money, fmtDate, empty, ageBadge } from '../ui.js';
 import { panelShell, jobCard, options, statCards, invoiceList } from './common.js';
 
-const TABS = [  ['#/business', 'Dashboard'],
+// The primary ride action sits in the dashboard header beside Share link, so it
+// is reachable without scrolling to the bottom of the page.
+const BOOK_CAR_CTA = '<a class="btn btn-navy btn-sm" href="#/business/bookings">Book a Car</a>';
+
+const TABS = [
+  ['#/business', 'Dashboard'],
   ['#/business/jobs', 'My Listings'],
   ['#/business/workers', 'Find Workers'],
   ['#/business/applications', 'Applications'],
