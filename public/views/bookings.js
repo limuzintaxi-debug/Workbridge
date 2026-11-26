@@ -233,13 +233,32 @@ function businessCard(booking) {
   </article>`;
 }
 
+// Only live stages belong in the active list. Everything else — completed,
+// cancelled or a legacy/unknown status — is history, so an old ride can never
+// reappear as an open booking in the Book a Car section.
+const ACTIVE_STATUSES = [
+  'created',
+  'offers',
+  'selected',
+  'confirmed',
+  'pickup',
+  'dropoff',
+  'complete_order',
+  'paid'
+];
+
+function isActiveBooking(booking) {
+  if (!booking) return false;
+  if (booking.completed_at || booking.cancelled_at) return false;
+  return ACTIVE_STATUSES.includes(String(booking.status || '').toLowerCase());
+}
+
 export async function businessBookingsView(ctx) {
   const { bookings } = await api.get('/bookings/mine');
   // Completed and cancelled rides live behind the History button; only live
   // bookings stay on the dashboard.
-  const CLOSED = ['completed', 'cancelled'];
-  const activeBookings = bookings.filter((booking) => !CLOSED.includes(booking.status));
-  const pastBookings = bookings.filter((booking) => CLOSED.includes(booking.status));
+  const activeBookings = bookings.filter(isActiveBooking);
+  const pastBookings = bookings.filter((booking) => !isActiveBooking(booking));
   const tabs = [
     ['#/business', 'Dashboard'],
     ['#/business/bookings', 'Book a Car'],
@@ -531,9 +550,8 @@ export async function driverBookingsView(ctx) {
   // business dashboard keeps its past bookings out of the live list. The list
   // itself comes from /bookings/driver/mine, which the server scopes to the
   // signed-in driver, so a driver only ever sees their own rides.
-  const CLOSED = ['completed', 'cancelled'];
-  const currentBookings = mine.bookings.filter((booking) => !CLOSED.includes(booking.status));
-  const pastBookings = mine.bookings.filter((booking) => CLOSED.includes(booking.status));
+  const currentBookings = mine.bookings.filter(isActiveBooking);
+  const pastBookings = mine.bookings.filter((booking) => !isActiveBooking(booking));
 
   const currentHtml = currentBookings.length
     ? currentBookings.map((booking) => driverCard(booking)).join('')
