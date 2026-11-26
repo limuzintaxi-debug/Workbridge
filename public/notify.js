@@ -15,15 +15,21 @@
  * bell and the in-app sound still work and nothing is claimed to be delivered.
  */
 import { api } from './api.js';
-import { esc, fmtDateTime } from './ui.js';
+import { esc, fmtDateTime, toast } from './ui.js';
 
 let started = false;
 let timer = null;
 let soundOn = true;
-let lastUnread = null;
+// Notification ids already announced. Keeping them here means a repeated poll of
+// the same rows — or a reload that lists yesterday's notifications — never plays
+// a second sound or opens a second chat popup for the same event.
+const announced = new Set();
+let seeded = false;
 let audioContext = null;
 
-const POLL_MS = 12000;
+// Poll often enough that a new booking or message is noticed while the driver is
+// using the app, without turning the bell into a busy loop.
+const POLL_MS = 7000;
 
 /** Bell button + slide-down list. Safe to re-render: listeners are delegated. */
 export function bellHtml() {
@@ -106,7 +112,63 @@ function paintSound(on) {
   if (box) box.checked = soundOn;
 }
 
-async function refresh({ announce = true } = {}) {
+/** The booking a chat notification belongs to: explicit field, or its link. */
+const chatBookingId = (row) => {
+  if (row && row.booking_id) return row.booking_id;
+  const match = /^#\/chat\/([^/?]+)/.exec(String((row && row.link) || ''));
+  return match ? match[1] : null;
+};
+
+// A ride that became available to a driver, or was assigned to them.
+const BOOKING_ALERT = /new booking request|confirm this booking|booking confirmed/i;
+
+/**
+ * Announce what is genuinely new since the previous poll:
+ *   • one chime per batch — never one per row, and never twice for one id;
+ *   • a visible line plus `wb:booking-ping` for a new or newly assigned booking;
+ *   • `wb:chat-ping` for a chat message, which opens the small chat popup.
+ * The first poll only records the history already on screen, so opening a page
+ * stays silent instead of replaying old events.
+ */
+function announceNew(rows) {
+  if (!seeded) {
+    seeded = true;
+    for (const row of rows) if (row && row.id) announced.add(row.id);
+    return;
+  }
+  const fresh = [];
+  for (const row of rows) {
+    if (!row || !row.id || announced.has(row.id)) continue;
+    announced.add(row.id);
+    fresh.push(row);
+  }
+  if (!fresh.length) return;
+  if (soundOn) chime();
+
+  for (const row of fresh) {
+    const bookingId = chatBookingId(row);
+    if (row.kind === 'chat' || /^#\/chat\//.test(String(row.link || ''))) {
+      if (bookingId) {
+        window.dispatchEvent(
+          new CustomEvent('wb:chat-ping', {
+            detail: { bookingId, title: row.title, body: row.body }
+          })
+        );
+      }
+      continue;
+    }
+    if (BOOKING_ALERT.test(String(row.title || ''))) {
+      toast(`${row.title}${row.body ? ` — ${row.body}` : ''}`);
+      window.dispatchEvent(
+        new CustomEvent('wb:booking-ping', {
+          detail: { title: row.title, body: row.body, link: row.link }
+        })
+      );
+    }
+  }
+}
+
+async function refresh() {
   if (!document.getElementById('notif-bell')) return;
   let result;
   try {
@@ -117,8 +179,7 @@ async function refresh({ announce = true } = {}) {
   paintBadge(result.unread);
   paintList(result.notifications || []);
   paintSound(result.sound);
-  if (announce && lastUnread !== null && result.unread > lastUnread && soundOn) chime();
-  lastUnread = result.unread;
+  announceNew(result.notifications || []);
 }
 
 function closePanel() {
@@ -152,7 +213,6 @@ export function initNotifications() {
       readAll.disabled = true;
       try {
         await api.post('/notifications/read-all');
-        lastUnread = 0;
         await refresh({ announce: false });
       } catch {
         /* ignore */
