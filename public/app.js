@@ -4,7 +4,8 @@ import { esc, setDefaultCurrency } from './ui.js?v=23';
 // must be imported here; without them boot threw ReferenceError and the page
 // rendered nothing but the skip link.
 import { initLang, t, langSwitcher, applyDirection, bindLangSwitcher } from './i18n.js?v=26';
-import { bellHtml, initNotifications } from './notify.js?v=26';
+import { bellHtml, initNotifications } from './notify.js?v=27';
+import { initChatPopup } from './chat-popup.js?v=1';
 import * as pub from './views/public.js?v=23';
 import * as worker from './views/worker.js?v=23';
 import * as business from './views/business.js?v=23';
@@ -291,6 +292,18 @@ async function render() {
     container.innerHTML = `${commissionBanner()}${view.html || ''}`;
     document.getElementById('topbar').innerHTML = topbarHtml(path);
     initNotifications();
+    initChatPopup(state.user);
+    // A booking that becomes available or is assigned must reach the driver's own
+    // list too, not only the bell. Bound once per page load so renders cannot
+    // stack duplicate listeners.
+    if (!window.__wbBookingPing) {
+      window.__wbBookingPing = true;
+      window.addEventListener('wb:booking-ping', () => {
+        if (state.user && state.user.role === 'worker' && location.hash.startsWith('#/worker/bookings')) {
+          render();
+        }
+      });
+    }
     bindLangSwitcher(document.getElementById('topbar'), () => render());
     document.getElementById('footer').innerHTML = footerHtml();
     document.title = view.title
