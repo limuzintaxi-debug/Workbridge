@@ -52,7 +52,11 @@ export function tabsBar(tabs, path) {
 const PANEL_LOGIN = {
   worker: '#/worker/signin',
   business: '#/business/signin',
-  admin: '#/admin/signin',
+  // The admin sign-in is shared on the public domain, not on whatever host the
+  // admin happens to be browsing, so this one target is absolute. The share
+  // handler resolves targets with new URL(target, location.href), which keeps an
+  // absolute URL as-is and leaves the relative worker/business targets alone.
+  admin: 'https://www.workbridges.live/#/admin/signin',
   owner: '#/owner/signin'
 };
 
